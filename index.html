@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>F-16 Hub (HTTPS Ultimate Mode)</title>
+  <title>F-16 Hub (LAN Testing Mode)</title>
   <link href="https://fonts.cdnfonts.com/css/sf-pro-display" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
@@ -18,7 +18,7 @@
     .tab-btn.active { background: var(--surface); box-shadow: 0 2px 8px rgba(0,0,0,0.06); font-weight: 600; }
     .btn { font-size: 12px; border-radius: 20px; font-weight: 500; }
     .top-header { background: var(--surface); padding: 16px 24px; border-radius: 18px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .test-box { background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 12px; padding: 15px; margin-bottom: 20px; }
+    .test-panel { background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 14px; padding: 20px; margin-bottom: 20px; }
   </style>
 </head>
 <body>
@@ -27,21 +27,25 @@
     <div id="main">
       
       <div class="top-header">
-        <h4 class="m-0 fw-bold"><i class="bi bi-cpu"></i> F-16 Dashboard <span class="badge bg-success fs-6 ms-2">HTTPS Multi-ID</span></h4>
+        <h4 class="m-0 fw-bold"><i class="bi bi-lan"></i> F-16 Dashboard <span class="badge bg-success fs-6 ms-2">LAN Mode</span></h4>
         <div class="d-flex gap-2 align-items-center">
           <button id="mainRefreshBtn" class="btn btn-outline-dark" onclick="refreshDataLogic()"><i class="bi bi-arrow-clockwise"></i> รีเฟรช</button>
           <span id="branchBadge" class="badge bg-light text-dark border p-2 fs-6">บอร์ดหน้าร้าน (206)</span>
         </div>
       </div>
 
-      <div class="test-box d-flex justify-content-between align-items-center">
-        <div>
-          <h6 class="fw-bold m-0 text-success">🧪 ระบบยิงคำสั่งพิมพ์ตรงแบบกระจายสัญญาณ (Multi Device ID)</h6>
-          <small class="text-muted">ระบบจะส่งคำสั่งเบเบิ้ลไปหาทุก ID ของ Epson หน้าร้าน เพื่อหาช่องทางที่ตรงกับตัวเครื่องมากที่สุด</small>
+      <div class="test-panel shadow-sm">
+        <div class="row align-items-center">
+          <div class="col-md-7">
+            <h5 class="fw-bold text-success m-0"><i class="bi bi-lightning-charge-fill"></i> แท่นทดลองออกคิวจำลอง (ยิงตรงสาย LAN)</h5>
+            <p class="text-muted m-0 mt-1">ใช้สำหรับกดยิงทดสอบดูว่าสัญญาณ XML จะสั่งให้เครื่องพิมพ์ Epson หน้าร้านตัดกระดาษออกมาได้จริงไหม</p>
+          </div>
+          <div class="col-md-5 text-md-end mt-3 mt-md-0">
+            <button class="btn btn-success btn-lg rounded-pill fw-bold px-4 shadow-sm" onclick="clickToTestQueuePrint()">
+              <i class="bi bi-printer-fill me-1"></i> กดออกคิว "คุณทดสอบ" (เบอร์ 99)
+            </button>
+          </div>
         </div>
-        <button class="btn bg-success text-white btn-lg fw-bold rounded-pill shadow-sm px-4" onclick="sendDirectTestPrint()">
-          <i class="bi bi-printer-fill me-1"></i> กดทดลองพิมพ์สลิปจำลอง
-        </button>
       </div>
 
       <ul class="nav nav-tabs">
@@ -49,10 +53,8 @@
         <button class="tab-btn" onclick="switchTab('lossTab', this)">Loss Lens</button>
       </ul>
 
-      <div id="queueTab" class="tab-content active"><div id="list" class="table-responsive"><p class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>กำลังเชื่อมต่อข้อมูลคิวสด...</p></div></div>
-      <div id="lossTab" class="tab-content">
-        <div id="lossHistoryList" class="table-responsive bg-white rounded p-2"></div>
-      </div>
+      <div id="queueTab" class="tab-content active"><div id="list" class="table-responsive"><p class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>กำลังดึงข้อมูลคิวสด...</p></div></div>
+      <div id="lossTab" class="tab-content"><div id="lossHistoryList" class="table-responsive bg-white rounded p-2"></div></div>
     </div> 
   </div>
 
@@ -62,8 +64,14 @@
     let globalLossPrintData = []; 
     let MY_BRANCH = "206";
 
-    // รายชื่อ Device ID ยอดฮิตที่เครื่องพิมพ์หน้าร้านมักจะใช้เชื่อมต่อ
-    const DEVICE_IDS = ["local_printer", "printer", "EPSON_PRINTER", "stream_printer"];
+    // สัญญาณพอร์ตและไอดีทั้งหมดที่ส่งขนานไปหาบอร์ดเอปสันหน้าร้าน
+    const PRINTER_ENDPOINTS = [
+      "https://192.168.1.201/cgi-bin/epos/service.cgi?devid=local_printer&timeout=5000",
+      "https://192.168.1.201/cgi-bin/epos/service.cgi?devid=printer&timeout=5000",
+      "http://192.168.1.201:8008/cgi-bin/epos/service.cgi?devid=local_printer&timeout=5000",
+      "http://192.168.1.201:8008/cgi-bin/epos/service.cgi?devid=printer&timeout=5000",
+      "http://192.168.1.201/cgi-bin/epos/service.cgi?devid=local_printer&timeout=5000"
+    ];
 
     window.handleGoogleData = function(d) {
       if (d && d.success) {
@@ -81,7 +89,7 @@
       document.getElementById("branchBadge").textContent = `บอร์ดหน้าร้าน (${MY_BRANCH})`;
       refreshDataLogic();
     });
-    
+
     function switchTab(tabId, btn) { 
         document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); 
         document.querySelectorAll('.tab-btn').forEach(el=>el.classList.remove('active')); 
@@ -101,7 +109,6 @@
     function renderQueueTable(list) {
       const div = document.getElementById("list");
       if(!list.length){ div.innerHTML = `<p class="text-center py-4 text-muted">ไม่มีคิวหน้าร้านสำหรับสาขานี้</p>`; return; }
-      
       let html = `<table class="table align-middle"><thead class="table-light"><tr><th>คิว</th><th>ลูกค้า</th><th>รุ่น</th><th>บริการ</th><th class="text-center">จัดการเครื่องพิมพ์ LAN</th></tr></thead><tbody>`;
       list.forEach(i => {
         html += `<tr>
@@ -109,11 +116,7 @@
           <td><b>${i.name || '-'}</b><br><small>${i.phone || '-'}</small></td>
           <td>${i.model || '-'}</td>
           <td>${i.service || '-'}</td>
-          <td class="text-center">
-            <button class="btn btn-primary rounded-pill px-3" onclick="sendToPrinterQueue(${JSON.stringify(i).replace(/"/g, '&quot;')})">
-              <i class="bi bi-printer"></i> กดพิมพ์คิวนี้
-            </button>
-          </td>
+          <td class="text-center"><button class="btn btn-primary rounded-pill px-3" onclick="fireLanPrintQueue(${JSON.stringify(i).replace(/"/g, '&quot;')})"><i class="bi bi-printer"></i> กดพิมพ์คิวนี้</button></td>
         </tr>`;
       });
       html += `</tbody></table>`;
@@ -122,74 +125,49 @@
 
     function renderLossTable(data) { 
         const container = document.getElementById('lossHistoryList'); 
-        if(!container || !data.length) { container.innerHTML = '<p class="text-center py-4 text-muted">ไม่มีประวัติ Loss Lens ในระบบ</p>'; return; }; 
+        if(!container || !data.length) { container.innerHTML = '<p class="text-center py-4 text-muted">ไม่มีประวัติ Loss Lens</p>'; return; }; 
         globalLossPrintData = [...data].reverse(); 
-        let html = `<table class="table table-hover align-middle"><thead class="table-light"><tr><th>CASE NO.</th><th>Customer ID</th><th>Claim Date</th><th>Reason</th><th>Lens Type</th><th class="text-center">สั่งพิมพ์ประวัติ</th></tr></thead><tbody>`;
+        let html = `<table class="table table-hover align-middle"><thead class="table-light"><tr><th>CASE NO.</th><th>Customer ID</th><th>Reason</th><th>Lens Type</th><th class="text-center">สั่งพิมพ์ประวัติ</th></tr></thead><tbody>`;
         globalLossPrintData.forEach((i, index) => {
-            html += `<tr>
-                <td class="fw-bold text-danger">${i.caseNo}</td>
-                <td>${i.customerId}</td>
-                <td>${i.claimDate}</td>
-                <td><span class="badge bg-danger">${i.reason}</span></td>
-                <td class="text-primary fw-bold">${i.lensType}</td>
-                <td class="text-center"><button class="btn btn-danger rounded-pill px-3" onclick="sendToPrinterLoss(${index})"><i class="bi bi-printer"></i> กดพิมพ์สลิป</button></td>
-            </tr>`;
+            html += `<tr><td class="fw-bold text-danger">${i.caseNo}</td><td>${i.customerId}</td><td><span class="badge bg-danger">${i.reason}</span></td><td class="text-primary fw-bold">${i.lensType}</td><td class="text-center"><button class="btn btn-danger rounded-pill px-3" onclick="fireLanPrintLoss(${index})"><i class="bi bi-printer"></i> กดพิมพ์สลิป</button></td></tr>`;
         });
         html += `</tbody></table>`;
         container.innerHTML = html;
     }
 
-    // 🚀 โมดิฟายฟังก์ชันยิงข้อมูลแบบกระจาย ID ยิงเบิ้ลล้างบางหาชื่อที่ถูกกระตุ้นบอร์ด
-    function executeEposPrint(xmlBody) {
-      DEVICE_IDS.forEach(id => {
-        let targetUrl = `https://192.168.1.201/cgi-bin/epos/service.cgi?devid=${id}&timeout=5000`;
-        fetch(targetUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/xml; charset=utf-8' },
-          body: xmlBody
-        }).catch(e => {});
+    // 🚀 ฟังก์ชันหลักส่งข้อมูลเบิ้ลกระจายหาพอร์ต LAN เครื่องพิมพ์หน้าร้านแบบเงียบ (Bypass ป๊อปอัปเด้งกวน)
+    function executeSilentLanPrint(xmlBody) {
+      PRINTER_ENDPOINTS.forEach(endpoint => {
+        fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'text/xml; charset=utf-8' }, body: xmlBody }).catch(e => {});
       });
-      alert("🎯 กระจายสัญญาณคำสั่งพิมพ์เรียบร้อยแล้วครับ!");
     }
 
-    function sendDirectTestPrint() {
+    // 🧪 ฟังก์ชันปุ่มกดทดลองออกคิวจำลองสดทันที
+    function clickToTestQueuePrint() {
       let requestBody = '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">';
       requestBody += '<align align="center"/><text font="font_a" width="2" height="2">OWNDAYS\n</text>';
-      requestBody += '<text font="font_a" width="3" height="3">MULTI-99\n\n</text>';
+      requestBody += '<text font="font_a" width="3" height="3">99\n\n</text>';
       requestBody += '<align align="left"/>';
-      requestBody += '<text font="font_a" width="1" height="1">โหมด: กระจายสัญญาณ Multi-ID\n</text>';
+      requestBody += '<text font="font_a" width="1" height="1">ชื่อลูกค้า: คุณ ทดสอบระบบ LAN\n</text>';
+      requestBody += '<text font="font_a" width="1" height="1">บริการ: ตรวจวัดสายตาความเร็วสูง\n</text>';
       requestBody += '<cut type="feed"/></epos-print>';
-      executeEposPrint(requestBody);
+      
+      executeSilentLanPrint(requestBody);
     }
 
-    function sendToPrinterQueue(i) {
+    function fireLanPrintQueue(i) {
       let serviceArr = (i.service || '-').split(',').map(s => s.trim()).filter(Boolean); 
       let servicesText = serviceArr.map(s => `  - ${s}`).join('\n');
       const timeStr = i.pickupTime ? new Date(i.pickupTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : "-";
-
-      let requestBody = '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">';
-      requestBody += '<align align="center"/><text font="font_a" width="2" height="2">OWNDAYS\n</text>';
-      requestBody += '<text font="font_a" width="3" height="3">' + (i.queueNumber || '-') + '\n\n</text>';
-      requestBody += '<text font="font_a" width="1" height="1">นัดรับแว่นเวลา ' + timeStr + ' น.\n</text>';
-      requestBody += '<align align="left"/>';
-      requestBody += '<text font="font_a" width="1" height="1">ชื่อลูกค้า: คุณ ' + (i.name || '-') + '\n</text>';
-      requestBody += '<text font="font_a" width="1" height="1">รุ่นแว่น: ' + (i.model || '-') + '\n</text>';
-      requestBody += '<text font="font_a" width="1" height="1">บริการ:\n' + servicesText + '\n</text>';
-      requestBody += '<cut type="feed"/></epos-print>';
-      executeEposPrint(requestBody);
+      
+      let requestBody = '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print"><align align="center"/><text font="font_a" width="2" height="2">OWNDAYS\n</text><text font="font_a" width="3" height="3">' + (i.queueNumber || '-') + '\n\n</text><text font="font_a" width="1" height="1">นัดรับแว่นเวลา ' + timeStr + ' น.\n</text><align align="left"/><text font="font_a" width="1" height="1">ชื่อลูกค้า: คุณ ' + (i.name || '-') + '\n</text><text font="font_a" width="1" height="1">รุ่นแว่น: ' + (i.model || '-') + '\n</text><text font="font_a" width="1" height="1">บริการ:\n' + servicesText + '\n</text><cut type="feed"/></epos-print>';
+      executeSilentLanPrint(requestBody);
     }
 
-    function sendToPrinterLoss(index) {
+    function fireLanPrintLoss(index) {
       const data = globalLossPrintData[index]; if(!data) return;
-      let requestBody = '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">';
-      requestBody += '<align align="center"/>';
-      requestBody += '<text font="font_a" width="1" height="2">' + (data.reason || 'LOSS LENS') + '\n</text>';
-      requestBody += '<text font="font_a" width="2" height="2">' + (data.caseNo || '-') + '\n\n</text>';
-      requestBody += '<align align="left"/>';
-      requestBody += '<text font="font_a" width="1" height="1">Customer ID: ' + (data.customerId || '-') + '\n</text>';
-      requestBody += '<text font="font_a" width="1" height="1">Lens Type: ' + (data.lensType || '-') + '\n</text>';
-      requestBody += '<cut type="feed"/></epos-print>';
-      executeEposPrint(requestBody);
+      let requestBody = '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print"><align align="center"/><text font="font_a" width="1" height="2">' + (data.reason || 'LOSS LENS') + '\n</text><text font="font_a" width="2" height="2">' + (data.caseNo || '-') + '\n\n</text><align align="left"/><text font="font_a" width="1" height="1">Customer ID: ' + (data.customerId || '-') + '\n</text><text font="font_a" width="1" height="1">Lens Type: ' + (data.lensType || '-') + '\n</text><cut type="feed"/></epos-print>';
+      executeSilentLanPrint(requestBody);
     }
   </script>
 </body>
