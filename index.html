@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>F-16 Hub (LAN Print Mode)</title>
+  <title>F-16 Hub (HTTPS Corporate Mode)</title>
   <link href="https://fonts.cdnfonts.com/css/sf-pro-display" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
@@ -18,19 +18,30 @@
     .tab-btn.active { background: var(--surface); box-shadow: 0 2px 8px rgba(0,0,0,0.06); font-weight: 600; }
     .btn { font-size: 12px; border-radius: 20px; font-weight: 500; }
     .top-header { background: var(--surface); padding: 16px 24px; border-radius: 18px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .test-box { background: #e3f2fd; border: 1px solid #bbdefb; border-radius: 12px; padding: 15px; margin-bottom: 20px; }
   </style>
 </head>
 <body>
-  <audio id="ding" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
 
   <div class="container-fluid py-4" style="max-width: 1400px;">
-    <div id="main" style="display:block;">
+    <div id="main">
+      
       <div class="top-header">
-        <h4 class="m-0 fw-bold"><i class="bi bi-display"></i> F-16 Dashboard <span class="badge bg-success fs-6 ms-2">GitHub LAN Mode</span></h4>
+        <h4 class="m-0 fw-bold"><i class="bi bi-ipad"></i> F-16 Dashboard <span class="badge bg-primary fs-6 ms-2">HTTPS Mode</span></h4>
         <div class="d-flex gap-2 align-items-center">
-          <button id="mainRefreshBtn" class="btn btn-outline-dark" onclick="refreshDataLogic()"><i class="bi bi-arrow-clockwise"></i> รีเฟรช</button>
+          <button id="mainRefreshBtn" class="btn btn-outline-dark" onclick="refreshDataLogic()"><i class="bi bi-arrow-clockwise"></i> รีเฟรชข้อมูลคิว</button>
           <span id="branchBadge" class="badge bg-light text-dark border p-2 fs-6">บอร์ดหน้าร้าน (206)</span>
         </div>
+      </div>
+
+      <div class="test-box d-flex justify-content-between align-items-center">
+        <div>
+          <h6 class="fw-bold m-0 text-primary">🧪 ปุ่มทดสอบระบบพิมพ์ตรง (HTTPS วงแลนร้าน)</h6>
+          <small class="text-muted">เมื่อกดลิ้งค์ข้ามหน้าความปลอดภัยข้อ 5 เสร็จแล้ว สามารถกดปุ่มนี้เพื่อลองสั่งปริ้นกระดาษเทสได้ทันทีครับ</small>
+        </div>
+        <button class="btn btn-primary btn-lg fw-bold rounded-pill shadow-sm px-4" onclick="sendDirectTestPrint()">
+          <i class="bi bi-printer-fill me-1"></i> กดทดลองพิมพ์สลิปด่วน
+        </button>
       </div>
 
       <ul class="nav nav-tabs">
@@ -40,10 +51,6 @@
 
       <div id="queueTab" class="tab-content active"><div id="list" class="table-responsive"><p class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>กำลังเชื่อมต่อข้อมูลคิวสด...</p></div></div>
       <div id="lossTab" class="tab-content">
-        <div class="d-flex justify-content-between mb-4">
-          <h5 class="fw-bold m-0">📊 ประวัติบันทึก Loss Lens</h5>
-          <button class="btn btn-dark" onclick="forcePrintLastLoss()">รีปริ้นรายการล่าสุด</button>
-        </div>
         <div id="lossHistoryList" class="table-responsive bg-white rounded p-2"></div>
       </div>
     </div> 
@@ -51,31 +58,17 @@
 
   <script>
     const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbyVRQ57HjFnACdW93BMS2sTp3fzp_kO2EhpsedFGQ-AiN0BkNvydZr_bj7EysNHzTy/exec"; 
-    
     let currentLossRawData = [];
     let globalLossPrintData = []; 
-    let currentQueueData = [];
     let MY_BRANCH = "206";
 
-    let storedQueue = localStorage.getItem('printedQueueIds') || '[]';
-    let printedQueueIds = new Set(JSON.parse(storedQueue));
+    // กำหนด URL ปลายทางเครื่องพิมพ์ผ่านระบบ HTTPS แบบเดียวกับ POS ของบริษัท
+    const PRINTER_HTTPS_URL = "https://192.168.1.201/cgi-bin/epos/service.cgi?devid=local_printer&timeout=10000";
 
-    // รับสัญญาณแกะกล่องข้อมูลตารางสดมาจัดแจงบนบอร์ดหน้าจอหลัก
     window.handleGoogleData = function(d) {
       if (d && d.success) {
-        currentQueueData = d.queue || [];
         currentLossRawData = d.lossPrintJob || [];
-        
-        // ฟังก์ชันตรวจสอบคิวงานใหม่ เพื่อยิงสั่งออโต้ปริ้นหน้าร้านแบบเรียลไทม์ผ่านสาย LAN
-        currentQueueData.forEach(i => { 
-            if(!printedQueueIds.has(i.queueId)){ 
-                printedQueueIds.add(i.queueId); 
-                manualPrint(i); 
-                localStorage.setItem("printedQueueIds", JSON.stringify([...printedQueueIds])); 
-                document.getElementById("ding").play().catch(()=>{}); 
-            } 
-        });
-        renderQueueTable(currentQueueData);
+        renderQueueTable(d.queue || []);
         renderLossTable(currentLossRawData);
       }
     };
@@ -84,12 +77,9 @@
       const urlParams = new URLSearchParams(window.location.search);
       const branchFromUrl = urlParams.get('branch');
       if (branchFromUrl) { localStorage.setItem('f16_branch_code', branchFromUrl.trim().toUpperCase()); }
-      
       MY_BRANCH = localStorage.getItem('f16_branch_code') || "206";
       document.getElementById("branchBadge").textContent = `บอร์ดหน้าร้าน (${MY_BRANCH})`;
-
       refreshDataLogic();
-      setInterval(refreshDataLogic, 5000); // เช็คคิวออโต้ทุกๆ 5 วินาที
     });
     
     function switchTab(tabId, btn) { 
@@ -102,7 +92,6 @@
     function refreshDataLogic() {
       const oldScript = document.getElementById('jsonpDataCall');
       if (oldScript) oldScript.remove();
-
       let script = document.createElement('script');
       script.id = 'jsonpDataCall';
       script.src = `${GOOGLE_API_URL}?branch=${MY_BRANCH}&callback=handleGoogleData&ts=${new Date().getTime()}`;
@@ -113,7 +102,7 @@
       const div = document.getElementById("list");
       if(!list.length){ div.innerHTML = `<p class="text-center py-4 text-muted">ไม่มีคิวหน้าร้านสำหรับสาขานี้</p>`; return; }
       
-      let html = `<table class="table align-middle"><thead class="table-light"><tr><th>คิว</th><th>ลูกค้า</th><th>รุ่น</th><th>บริการ</th><th class="text-center">พิมพ์ใบงานผ่านสาย LAN</th></tr></thead><tbody>`;
+      let html = `<table class="table align-middle"><thead class="table-light"><tr><th>คิว</th><th>ลูกค้า</th><th>รุ่น</th><th>บริการ</th><th class="text-center">จัดการเครื่องพิมพ์ LAN</th></tr></thead><tbody>`;
       list.forEach(i => {
         html += `<tr>
           <td class="fw-bold fs-4">${i.queueNumber || '-'}</td>
@@ -121,8 +110,8 @@
           <td>${i.model || '-'}</td>
           <td>${i.service || '-'}</td>
           <td class="text-center">
-            <button class="btn btn-primary rounded-pill px-3" onclick="manualPrint(${JSON.stringify(i).replace(/"/g, '&quot;')})">
-              <i class="bi bi-printer"></i> กดพิมพ์
+            <button class="btn btn-primary rounded-pill px-3" onclick="sendToPrinterQueue(${JSON.stringify(i).replace(/"/g, '&quot;')})">
+              <i class="bi bi-printer"></i> กดพิมพ์คิวนี้
             </button>
           </td>
         </tr>`;
@@ -133,9 +122,9 @@
 
     function renderLossTable(data) { 
         const container = document.getElementById('lossHistoryList'); 
-        if(!container || !data.length) { container.innerHTML = '<p class="text-center py-4 text-muted">ไม่มีประวัติ Loss Lens ของสาขาในชีต</p>'; return; }; 
+        if(!container || !data.length) { container.innerHTML = '<p class="text-center py-4 text-muted">ไม่มีประวัติ Loss Lens ในระบบ</p>'; return; }; 
         globalLossPrintData = [...data].reverse(); 
-        let html = `<table class="table table-hover align-middle"><thead class="table-light"><tr><th>CASE NO.</th><th>Customer ID</th><th>Claim Date</th><th>Reason</th><th>Lens Type</th><th class="text-center"> Reprint ผ่านสาย LAN</th></tr></thead><tbody>`;
+        let html = `<table class="table table-hover align-middle"><thead class="table-light"><tr><th>CASE NO.</th><th>Customer ID</th><th>Claim Date</th><th>Reason</th><th>Lens Type</th><th class="text-center">สั่งพิมพ์ประวัติ</th></tr></thead><tbody>`;
         globalLossPrintData.forEach((i, index) => {
             html += `<tr>
                 <td class="fw-bold text-danger">${i.caseNo}</td>
@@ -143,16 +132,39 @@
                 <td>${i.claimDate}</td>
                 <td><span class="badge bg-danger">${i.reason}</span></td>
                 <td class="text-primary fw-bold">${i.lensType}</td>
-                <td class="text-center"><button class="btn btn-danger rounded-pill px-3" onclick="printLossLensSlip(${index})"><i class="bi bi-printer"></i> กดพิมพ์สลิป</button></td>
+                <td class="text-center"><button class="btn btn-danger rounded-pill px-3" onclick="sendToPrinterLoss(${index})"><i class="bi bi-printer"></i> กดพิมพ์สลิป</button></td>
             </tr>`;
         });
         html += `</tbody></table>`;
         container.innerHTML = html;
     }
 
-    function manualPrint(i) {
-      const printerIp = "192.168.1.201"; 
-      const printerUrl = "http://" + printerIp + "/cgi-bin/epos/service.cgi?devid=local_printer&timeout=10000";
+    // 🚀 ฟังก์ชันยิงข้อมูล XML สู่เครื่องพิมพ์ผ่านช่องทางความปลอดภัยสูง HTTPS แบบ POS ร้านค้า
+    function executeEposPrint(xmlBody) {
+      fetch(PRINTER_HTTPS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/xml; charset=utf-8' },
+        body: xmlBody
+      })
+      .then(() => alert("🎯 สัญญาณยิงเข้าเครื่องพิมพ์สำเร็จแล้วครับ!"))
+      .catch(e => {
+        console.error(e);
+        alert("❌ สัญญาณถูกบล็อกความปลอดภัย! กรุณากดลิงก์ปลดล็อก https://192.168.1.201... ในข้อ 1-4 ก่อนนะครับพี่");
+      });
+    }
+
+    function sendDirectTestPrint() {
+      let requestBody = '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">';
+      requestBody += '<align align="center"/><text font="font_a" width="2" height="2">OWNDAYS\n</text>';
+      requestBody += '<text font="font_a" width="3" height="3">HTTPS-99\n\n</text>';
+      requestBody += '<align align="left"/>';
+      requestBody += '<text font="font_a" width="1" height="1">โหมด: HTTPS Corporate Mode\n</text>';
+      requestBody += '<text font="font_a" width="1" height="1">สถานะ: ปลดล็อก SSL Certificate สำเร็จ\n</text>';
+      requestBody += '<cut type="feed"/></epos-print>';
+      executeEposPrint(requestBody);
+    }
+
+    function sendToPrinterQueue(i) {
       let serviceArr = (i.service || '-').split(',').map(s => s.trim()).filter(Boolean); 
       let servicesText = serviceArr.map(s => `  - ${s}`).join('\n');
       const timeStr = i.pickupTime ? new Date(i.pickupTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : "-";
@@ -166,17 +178,11 @@
       requestBody += '<text font="font_a" width="1" height="1">รุ่นแว่น: ' + (i.model || '-') + '\n</text>';
       requestBody += '<text font="font_a" width="1" height="1">บริการ:\n' + servicesText + '\n</text>';
       requestBody += '<cut type="feed"/></epos-print>';
-
-      fetch(printerUrl, { method: 'POST', headers: { 'Content-Type': 'text/xml; charset=utf-8' }, body: requestBody })
-      .then(() => console.log("ส่งคำสั่งพิมพ์คิวทางสาย LAN สำเร็จ"))
-      .catch(e => console.error("LAN Error: ", e));
+      executeEposPrint(requestBody);
     }
 
-    function printLossLensSlip(index) {
+    function sendToPrinterLoss(index) {
       const data = globalLossPrintData[index]; if(!data) return;
-      const printerIp = "192.168.1.201"; 
-      const printerUrl = "http://" + printerIp + "/cgi-bin/epos/service.cgi?devid=local_printer&timeout=10000";
-
       let requestBody = '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">';
       requestBody += '<align align="center"/>';
       requestBody += '<text font="font_a" width="1" height="2">' + (data.reason || 'LOSS LENS') + '\n</text>';
@@ -185,12 +191,8 @@
       requestBody += '<text font="font_a" width="1" height="1">Customer ID: ' + (data.customerId || '-') + '\n</text>';
       requestBody += '<text font="font_a" width="1" height="1">Lens Type: ' + (data.lensType || '-') + '\n</text>';
       requestBody += '<cut type="feed"/></epos-print>';
-
-      fetch(printerUrl, { method: 'POST', headers: { 'Content-Type': 'text/xml; charset=utf-8' }, body: requestBody })
-      .then(() => console.log("ส่งคำสั่ง Reprint Loss Lens ทางสาย LAN สำเร็จ"))
-      .catch(e => console.error("LAN Error: ", e));
+      executeEposPrint(requestBody);
     }
-    function forcePrintLastLoss() { if(globalLossPrintData.length > 0) printLossLensSlip(0); }
   </script>
 </body>
 </html>
