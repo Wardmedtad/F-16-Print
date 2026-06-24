@@ -55,18 +55,16 @@
   </div>
 
   <script>
-    // 🔗 ลิงก์ API ปลายทางที่เปิดใช้งาน New Version บน Google Apps Script แล้ว
     const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbyVRQ57HjFnACdW93BMS2sTp3fzp_kO2EhpsedFGQ-AiN0BkNvydZr_bj7EysNHzTy/exec"; 
     
     let currentLossRawData = [];
     let globalLossPrintData = []; 
     let currentQueueData = [];
-    let MY_BRANCH = "206";
+    let MY_BRANCH = "206"; // ล็อกค่าเริ่มต้นเป็นสาขา 206 อัตโนมัติกรณีเปิดลิงก์ธรรมดา
 
     let storedQueue = localStorage.getItem('printedQueueIds') || '[]';
     let printedQueueIds = new Set(JSON.parse(storedQueue));
 
-    // ฟังก์ชันรับสัญญาณแกะกล่องข้อมูลพัสดุ JSONP
     window.handleGoogleData = function(d) {
       if (d && d.success) {
         currentQueueData = d.queue || [];
@@ -104,7 +102,6 @@
         btn.classList.add('active'); 
     }
 
-    // ซ่อมท่อส่งสัญญาณเรียบร้อย เพิ่มสคริปต์ตรวจจับ Callback
     function refreshDataLogic() {
       const oldScript = document.getElementById('jsonpDataCall');
       if (oldScript) oldScript.remove();
