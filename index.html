@@ -42,7 +42,7 @@
         <button class="tab-btn" onclick="switchTab('lossTab', this)">Loss Lens</button>
       </ul>
 
-      <div id="queueTab" class="tab-content active"><div id="list" class="table-responsive"></div></div>
+      <div id="queueTab" class="tab-content active"><div id="list" class="table-responsive"><p class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>กำลังดึงข้อมูลคิวสดจาก Google Sheets...</p></div></div>
       <div id="transferTab" class="tab-content"><div id="transferTableContainer" class="table-responsive"><p class="text-center py-4 text-muted">ไม่มีรายการ Transfer</p></div></div>
       <div id="resTab" class="tab-content"><div id="resDashBody" class="table-responsive"><p class="text-center py-4 text-muted">ไม่มีข้อมูลใบจอง</p></div></div>
 
@@ -58,8 +58,8 @@
   </div>
 
   <script>
-    // 🔗 ท่อเชื่อมต่อหลักดึงข้อมูลสเปรดชีต
-    const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbyV0QpVn57ylj4nZ-dMoByFXcVXPB3gxsW159mVex7fdk7IMye7y3CdsiIX0tswIEtL/exec"; 
+    // 🔗 อัปเดตลิงก์ API ล่าสุดของพี่ให้ถูกต้องตามเบราว์เซอร์โชว์
+    const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbyVRQ57HjFnACdW93BMS2sTp3fzp_kO2EhpsedFGQ-AiN0BkNvydZr_bj7EysNHzTy/exec"; 
     
     let currentLossRawData = [];
     let globalLossPrintData = []; 
@@ -70,7 +70,6 @@
     let printedQueueIds = new Set(JSON.parse(storedQueue));
 
     document.addEventListener("DOMContentLoaded", function() {
-      // ตรวจจับระบบรหัสสาขาอัตโนมัติจาก URL เพื่อแยกข้อมูลพนักงานหน้าร้าน
       const urlParams = new URLSearchParams(window.location.search);
       const branchFromUrl = urlParams.get('branch');
       
@@ -82,7 +81,7 @@
       document.getElementById("branchBadge").textContent = `บอร์ดหน้าร้าน (${MY_BRANCH})`;
 
       refreshDataLogic();
-      setInterval(refreshDataLogic, 5000); // วนลูปเช็คคิวเพื่อออโต้ปริ้นทุก 5 วินาที
+      setInterval(refreshDataLogic, 5000); // ออโต้รีเฟรชเช็คคิวและสั่งปริ้นอัตโนมัติทุก 5 วินาที
     });
     
     function switchTab(tabId, btn) { 
@@ -92,7 +91,7 @@
         btn.classList.add('active'); 
     }
 
-    // 🌐 ระบบดึงข้อมูลผ่านเทคนิค JSONP ทลายบล็อก CORS เบราว์เซอร์ทุกเวอร์ชัน ข้อมูลตารางมาทันทีแน่นอน
+    // 🌐 ฟังก์ชัน JSONP Bridge ทะลวงแคชและ Cors บังคับดึงตารางสดมาแสดง
     function refreshDataLogic() {
       const oldScript = document.getElementById('jsonpDataCall');
       if (oldScript) oldScript.remove();
@@ -102,7 +101,7 @@
           currentQueueData = d.queue || [];
           currentLossRawData = d.lossPrintJob || [];
           
-          // ระบบจับคิวใหม่เพื่อยิงสั่งออโต้ปริ้นหน้าร้าน
+          // ตรวจจับคิวงานใหม่เพื่อยิงคำสั่งพิมพ์ออกเครื่อง EPSON ทันที
           currentQueueData.forEach(i => { 
               if(!printedQueueIds.has(i.queueId)){ 
                   printedQueueIds.add(i.queueId); 
@@ -115,12 +114,11 @@
           renderQueueTable(currentQueueData);
           renderLossTable(currentLossRawData);
         }
-        let script = document.getElementById('jsonpDataCall');
-        if (script) script.remove();
       };
 
       let script = document.createElement('script');
       script.id = 'jsonpDataCall';
+      // ระบุปลายทางรับส่งข้อมูลอย่างชัดเจน
       script.src = `${GOOGLE_API_URL}?action=getData&branch=${MY_BRANCH}&callback=handleGoogleData&ts=${new Date().getTime()}`;
       document.body.appendChild(script);
     }
@@ -131,7 +129,8 @@
       
       let html = `<table class="table align-middle"><thead class="table-light"><tr><th>คิว</th><th>ลูกค้า</th><th>รุ่น</th><th>บริการ</th><th>สถานะ</th></tr></thead><tbody>`;
       html += list.map(i => {
-        return `<tr><td class="fw-bold fs-4">${i.queueNumber}</td><td><b>${i.name}</b><br><small>${i.phone}</small></td><td>${i.model}</td><td>${i.service}</td><td><span class="badge bg-danger">${i.status}</span></td></tr>`;
+        let statusBadge = i.status === 'Done' ? 'bg-success' : 'bg-danger';
+        return `<tr><td class="fw-bold fs-4">${i.queueNumber || '-'}</td><td><b>${i.name || '-'}</b><br><small>${i.phone || '-'}</small></td><td>${i.model || '-'}</td><td>${i.service || '-'}</td><td><span class="badge ${statusBadge}">${i.status || 'Pending'}</span></td></tr>`;
       }).join("");
       html += `</tbody></table>`;
       div.innerHTML = html;
