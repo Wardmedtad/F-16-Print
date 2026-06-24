@@ -29,7 +29,7 @@
         <h4 class="m-0 fw-bold"><i class="bi bi-display"></i> F-16 Dashboard <span class="badge bg-success fs-6 ms-2">GitHub Mode</span></h4>
         <div class="d-flex gap-2 align-items-center">
           <button id="mainRefreshBtn" class="btn btn-outline-dark" onclick="refreshDataLogic()"><i class="bi bi-arrow-clockwise"></i> รีเฟรช</button>
-          <span class="badge bg-light text-dark border p-2 fs-6">บอร์ดหน้าร้าน (206)</span>
+          <span id="branchBadge" class="badge bg-light text-dark border p-2 fs-6">กำลังดึงข้อมูลสาขา...</span>
         </div>
       </div>
 
@@ -56,16 +56,28 @@
   </div>
 
   <script>
-    // 🔗 🔴 เอาลิงก์ Web App URL จาก Google Apps Script ที่ก๊อปปี้ไว้มาวางแทนที่ตรงนี้ครับ
-    const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbwRFQ57hEjFnACdw93BMS2sTp3fzpkO2EhpsedFGQ-AiN0BkNvydZr_bj7EhysNHzTy/exec?page=operation"; 
+    // 🔗 🟢 ซ่อมสัญลักษณ์ท่อเชื่อม API และใช้เป็นฐานส่งข้อมูล JSON
+    const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbyV0QpVn57ylj4nZ-dMoByFXcVXPB3gxsW159mVex7fdk7IMye7y3CdsiIX0tswIEtL/exec"; 
     
     let currentLossRawData = [];
     let globalLossPrintData = []; 
     let currentQueueData = [];
+    let MY_BRANCH = "206"; // ค่าเริ่มต้นกรณีตรวจไม่เจอ
 
+    // 🚀 ฟังก์ชันจัดการระบบออโต้ล็อกอินแยกสาขาอัตโนมัติเมื่อเปิดหน้าจอ
     document.addEventListener("DOMContentLoaded", function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const branchFromUrl = urlParams.get('branch');
+      
+      if (branchFromUrl) {
+        localStorage.setItem('f16_branch_code', branchFromUrl.trim().toUpperCase());
+      }
+      
+      MY_BRANCH = localStorage.getItem('f16_branch_code') || "206";
+      document.getElementById("branchBadge").textContent = `บอร์ดหน้าร้าน (${MY_BRANCH})`;
+
       refreshDataLogic();
-      setInterval(refreshDataLogic, 5000); // รีเฟรชอัตโนมัติทุก 5 วินาที
+      setInterval(refreshDataLogic, 5000); // ออโต้รีเฟรชเช็คคิวและสั่งพิมพ์ทุก 5 วินาที
     });
     
     function switchTab(tabId, btn) { 
@@ -75,12 +87,12 @@
         btn.classList.add('active'); 
     }
 
-    // 🌐 ดึงข้อมูลแบบเรียลไทม์จาก Google Sheets เข้ามาบน GitHub
+    // 🌐 ดึงข้อมูลแยกตามสาขาประจำเครื่องแบบไดนามิก ไม่ล็อกตายตัว
     async function refreshDataLogic() {
       try {
         const response = await fetch(GOOGLE_API_URL, {
           method: 'POST',
-          body: JSON.stringify({ branch: "206", action: "getData" })
+          body: JSON.stringify({ branch: MY_BRANCH, action: "getData" })
         });
         const d = await response.json();
         if (d && d.success) {
@@ -125,7 +137,6 @@
         container.innerHTML = html;
     }
 
-    // 🖨️ ยิงพิมพ์ตรงเข้าเครื่องพิมพ์ในวง LAN หน้าร้านสำเร็จแน่นอน
     function printLossLensSlip(index) {
       const data = globalLossPrintData[index];
       if(!data) return;
