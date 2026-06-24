@@ -27,7 +27,6 @@
 
   <div class="container-fluid py-4" style="max-width: 1400px;">
     
-    <!-- 🔒 หน้าจอ Login แยกสาขา สไตล์ Apple -->
     <div id="loginBox" class="apple-login-container" style="display:block;">
       <h3 class="fw-bold mb-4">F-16 Hub</h3>
       <input type="text" id="branchCodeInput" class="form-control mb-3 text-center" placeholder="รหัสสาขา (Branch Code)">
@@ -35,7 +34,6 @@
       <button id="loginBtn" class="btn btn-dark w-100 py-2 fs-6" onclick="login()">Sign In</button>
     </div>
 
-    <!-- 🔓 หน้าจอแดชบอร์ดหลัก -->
     <div id="main" style="display:none;">
       <div class="top-header">
         <h4 class="m-0 fw-bold"><i class="bi bi-display"></i> F-16 Dashboard <span class="badge bg-success fs-6 ms-2">GitHub Mode</span></h4>
@@ -69,7 +67,7 @@
   </div>
 
   <script>
-    // 🔗 🔴 เปลี่ยนเป็นลิงก์ Web App ตัวล่าสุดจากหน้า Apps Script ของพี่
+    // 🔗 ลิงก์ API ยิงตรงไปหน้า Google Apps Script ของพี่
     const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbyV0QpVn57ylj4nZ-dMoByFXcVXPB3gxsW159mVex7fdk7IMye7y3CdsiIX0tswIEtL/exec"; 
     
     let currentLossRawData = [];
@@ -81,14 +79,13 @@
     let printedQueueIds = new Set(JSON.parse(storedQueue));
 
     document.addEventListener("DOMContentLoaded", function() {
-      // ดักจับการ Login แยกสาขาทาง URL ลัด เช่น ?branch=206
+      // ดักจับและจดจำรหัสสาขาอัตโนมัติผ่านพารามิเตอร์ลิงก์
       const urlParams = new URLSearchParams(window.location.search);
       const branchFromUrl = urlParams.get('branch');
       if (branchFromUrl) {
         localStorage.setItem('f16_branch_code', branchFromUrl.trim().toUpperCase());
         localStorage.setItem('owndays_staff', 'Auto Login');
       }
-
       checkAuth();
     });
 
@@ -102,14 +99,15 @@
         document.getElementById("branchBadge").textContent = `สตาฟ: ${cachedStaff} (${MY_BRANCH})`;
         
         refreshDataLogic();
-        setInterval(refreshDataLogic, 5000); // เช็คคิวอัตโนมัติเพื่อสั่งออโต้ปริ้นทุก 5 วินาที
+        setInterval(refreshDataLogic, 5000); // เช็คคิวออโต้เพื่อสั่งปริ้นทุก ๆ 5 วินาที
       } else {
         document.getElementById("loginBox").style.display = "block";
         document.getElementById("main").style.display = "none";
       }
     }
 
-    async function login() {
+    // 🌐 ฟังก์ชัน Sign In ยิงผ่านระบบ JSONP แบบข้ามความปลอดภัยของ Chrome
+    function login() {
       const b = document.getElementById("branchCodeInput").value.trim();
       const s = document.getElementById("staffIdInput").value.trim();
       if(!b || !s) { alert("กรุณากรอกข้อมูลให้ครบครับ"); return; }
@@ -118,13 +116,7 @@
       btn.innerHTML = "กำลังตรวจสอบ... ⏳";
       btn.disabled = true;
 
-      try {
-        const response = await fetch(GOOGLE_API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ action: 'verifyStaffById', branch: b, staffId: s })
-        });
-        const res = await response.json();
+      window.handleLoginResponse = function(res) {
         if (res && res.status === "success") {
           localStorage.setItem('f16_branch_code', b.toUpperCase());
           localStorage.setItem('owndays_staff', res.staffName);
@@ -134,11 +126,14 @@
           btn.innerHTML = "Sign In";
           btn.disabled = false;
         }
-      } catch (e) {
-        alert("กรุณาเปิดสิทธิ์ Insecure Content ในเบราว์เซอร์ก่อนใช้งานครับ");
-        btn.innerHTML = "Sign In";
-        btn.disabled = false;
-      }
+        let script = document.getElementById('jsonpAuthCall');
+        if (script) script.remove();
+      };
+
+      let script = document.createElement('script');
+      script.id = 'jsonpAuthCall';
+      script.src = `${GOOGLE_API_URL}?action=verifyStaff&branch=${b}&staffId=${s}&callback=handleLoginResponse&ts=${new Date().getTime()}`;
+      document.body.appendChild(script);
     }
 
     function logoutAndClear() {
@@ -156,20 +151,17 @@
         btn.classList.add('active'); 
     }
 
-    // 🌐 ยิงผ่านท่อดึงข้อมูลแบบไดนามิก ป้องกันค้าง 100%
-    async function refreshDataLogic() {
-      try {
-        const response = await fetch(GOOGLE_API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ branch: MY_BRANCH, action: 'getData' })
-        });
-        const d = await response.json();
+    // 🌐 ท่อหลักดึงข้อมูลตารางคิวและประวัติ Loss Lens แบบเรียลไทม์
+    function refreshDataLogic() {
+      const oldScript = document.getElementById('jsonpDataCall');
+      if (oldScript) oldScript.remove();
+
+      window.handleGoogleData = function(d) {
         if (d && d.success) {
           currentQueueData = d.queue || [];
           currentLossRawData = d.lossPrintJob || [];
           
-          // ตรวจสอบคิวใหม่เพื่อสั่งออโต้ปริ้น
+          // ตรวจสอบคิวเปิดใหม่หน้าร้านเพื่อยิงคำสั่งปริ้น
           currentQueueData.forEach(i => { 
               if(!printedQueueIds.has(i.queueId)){ 
                   printedQueueIds.add(i.queueId); 
@@ -182,14 +174,21 @@
           renderQueueTable(currentQueueData);
           renderLossTable(currentLossRawData);
         }
-      } catch (e) { console.error("API Error:", e); }
+        let script = document.getElementById('jsonpDataCall');
+        if (script) script.remove();
+      };
+
+      let script = document.createElement('script');
+      script.id = 'jsonpDataCall';
+      script.src = `${GOOGLE_API_URL}?action=getData&branch=${MY_BRANCH}&callback=handleGoogleData&ts=${new Date().getTime()}`;
+      document.body.appendChild(script);
     }
 
     function renderQueueTable(list) {
       const div = document.getElementById("list");
       if(!list.length){ div.innerHTML = `<p class="text-center py-4 text-muted">ไม่มีคิวหน้าร้านสำหรับสาขานี้</p>`; return; }
       
-      let html = `<table class="table align-middle"><thead class="table-light"><tr><th>คิว</th><th>ลูกค้า</th><th>รุ่น</th><th>บริการ</th><th>สถานะ</th></tr></thead><tbody>`;
+      let html = `<table class="table align-middle"><thead class="table-light"><tr><th>คิว</th><th>ลูกค้า</th><th>รุ่น</th><th>บริการ</th><th>status</th></tr></thead><tbody>`;
       html += list.map(i => {
         return `<tr><td class="fw-bold fs-4">${i.queueNumber}</td><td><b>${i.name}</b><br><small>${i.phone}</small></td><td>${i.model}</td><td>${i.service}</td><td><span class="badge bg-danger">${i.status}</span></td></tr>`;
       }).join("");
@@ -232,7 +231,7 @@
       let requestBody = '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">';
       requestBody += '<align align="center"/><text font="font_a" width="2" height="2">OWNDAYS\n</text>';
       requestBody += `<text font="font_a" width="3" height="3">${i.queueNumber}\n\n</text>`;
-      requestBody += `<text font="font_a" width="1" height="1">นัดรับแว่นเวลา ${timeStr} น.\n</text>`;
+      requestBody += `<text font="font_a" width="1" height="1">นัดรับแว่นเวลา ${timeStr} น.\n</text>';
       requestBody += '<align align="left"/>';
       requestBody += `<text font="font_a" width="1" height="1">ชื่อลูกค้า: คุณ ${i.name || '-'}\n</text>`;
       requestBody += `<text font="font_a" width="1" height="1">รุ่นแว่น: ${i.model || '-'}\n</text>`;
