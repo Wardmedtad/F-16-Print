@@ -56,15 +56,14 @@
   </div>
 
   <script>
-    // 🔗 🟢 ซ่อมสัญลักษณ์ท่อเชื่อม API และใช้เป็นฐานส่งข้อมูล JSON
+    // 🔗 ตรวจสอบความถูกต้องของลิงก์ยิง API
     const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbyV0QpVn57ylj4nZ-dMoByFXcVXPB3gxsW159mVex7fdk7IMye7y3CdsiIX0tswIEtL/exec"; 
     
     let currentLossRawData = [];
     let globalLossPrintData = []; 
     let currentQueueData = [];
-    let MY_BRANCH = "206"; // ค่าเริ่มต้นกรณีตรวจไม่เจอ
+    let MY_BRANCH = "206";
 
-    // 🚀 ฟังก์ชันจัดการระบบออโต้ล็อกอินแยกสาขาอัตโนมัติเมื่อเปิดหน้าจอ
     document.addEventListener("DOMContentLoaded", function() {
       const urlParams = new URLSearchParams(window.location.search);
       const branchFromUrl = urlParams.get('branch');
@@ -77,7 +76,7 @@
       document.getElementById("branchBadge").textContent = `บอร์ดหน้าร้าน (${MY_BRANCH})`;
 
       refreshDataLogic();
-      setInterval(refreshDataLogic, 5000); // ออโต้รีเฟรชเช็คคิวและสั่งพิมพ์ทุก 5 วินาที
+      setInterval(refreshDataLogic, 5000);
     });
     
     function switchTab(tabId, btn) { 
@@ -87,12 +86,13 @@
         btn.classList.add('active'); 
     }
 
-    // 🌐 ดึงข้อมูลแยกตามสาขาประจำเครื่องแบบไดนามิก ไม่ล็อกตายตัว
+    // 🌐 ปรับระบบยิงข้อมูลใหม่ให้อยู่ในโหมดที่ปลอดภัยจากการค้างและบล็อก
     async function refreshDataLogic() {
       try {
         const response = await fetch(GOOGLE_API_URL, {
           method: 'POST',
-          body: JSON.stringify({ branch: MY_BRANCH, action: "getData" })
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ branch: MY_BRANCH, action: 'getData' })
         });
         const d = await response.json();
         if (d && d.success) {
@@ -137,22 +137,23 @@
         container.innerHTML = html;
     }
 
+    // 🖨️ คลีนสคริปต์พิมพ์สลิปและแก้ข้อความ String บรรทัดปัญหาเรียบร้อย
     function printLossLensSlip(index) {
       const data = globalLossPrintData[index];
       if(!data) return;
 
       const printerIp = "192.168.1.201"; 
-      const printerUrl = `http://${printerIp}/cgi-bin/epos/service.cgi?devid=local_printer&timeout=10000`;
+      const printerUrl = "http://" + printerIp + "/cgi-bin/epos/service.cgi?devid=local_printer&timeout=10000";
 
       let requestBody = '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">';
       requestBody += '<align align="center"/>';
-      requestBody += `<text font="font_a" width="1" height="2">${data.reason}\n</text>`;
-      requestBody += `<text font="font_a" width="2" height="2">${data.caseNo}\n\n</text>`;
+      requestBody += '<text font="font_a" width="1" height="2">' + (data.reason || 'LOSS LENS') + '\n</text>';
+      requestBody += '<text font="font_a" width="2" height="2">' + (data.caseNo || '-') + '\n\n</text>';
       requestBody += '<text font="font_a" width="1" height="1">------------------------------------------\n</text>';
       requestBody += '<align align="left"/>';
-      requestBody += `<text font="font_a" width="1" height="1">Customer ID: ${data.customerId}\n</text>';
-      requestBody += `<text font="font_a" width="1" height="1">Lens Type: ${data.lensType}\n</text>';
-      requestBody += `<text font="font_a" width="1" height="1">Staff ID: ${data.staffId || '-'}\n</text>';
+      requestBody += '<text font="font_a" width="1" height="1">Customer ID: ' + (data.customerId || '-') + '\n</text>';
+      requestBody += '<text font="font_a" width="1" height="1">Lens Type: ' + (data.lensType || '-') + '\n</text>';
+      requestBody += '<text font="font_a" width="1" height="1">Staff ID: ' + (data.staffId || '-') + '\n</text>';
       requestBody += '<align align="center"/><text font="font_a" width="1" height="1">OWNDAYS OPERATION\n</text>';
       requestBody += '<cut type="feed"/>';
       requestBody += '</epos-print>';
