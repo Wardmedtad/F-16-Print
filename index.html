@@ -19,7 +19,6 @@
     .btn { font-size: 12px; border-radius: 20px; font-weight: 500; }
     .form-control, .form-select { font-size: 13px; border-radius: 8px; border: 1px solid var(--border); padding: 10px; }
     .top-header { background: var(--surface); padding: 16px 24px; border-radius: 18px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .apple-login-container { max-width: 380px; margin: 80px auto; text-align: center; padding: 40px 30px; background: #fff; border-radius: 20px; box-shadow: 0 4px 24px rgba(0,0,0,0.04); }
   </style>
 </head>
 <body>
@@ -27,20 +26,12 @@
 
   <div class="container-fluid py-4" style="max-width: 1400px;">
     
-    <div id="loginBox" class="apple-login-container" style="display:block;">
-      <h3 class="fw-bold mb-4">F-16 Hub</h3>
-      <input type="text" id="branchCodeInput" class="form-control mb-3 text-center" placeholder="รหัสสาขา (Branch Code)">
-      <input type="password" id="staffIdInput" class="form-control mb-4 text-center" placeholder="รหัสผู้ใช้งาน (Staff ID)">
-      <button id="loginBtn" class="btn btn-dark w-100 py-2 fs-6" onclick="login()">Sign In</button>
-    </div>
-
-    <div id="main" style="display:none;">
+    <div id="main" style="display:block;">
       <div class="top-header">
         <h4 class="m-0 fw-bold"><i class="bi bi-display"></i> F-16 Dashboard <span class="badge bg-success fs-6 ms-2">GitHub Mode</span></h4>
         <div class="d-flex gap-2 align-items-center">
           <button id="mainRefreshBtn" class="btn btn-outline-dark" onclick="refreshDataLogic()"><i class="bi bi-arrow-clockwise"></i> รีเฟรช</button>
-          <button class="btn btn-danger" onclick="logoutAndClear()">LOG OUT</button>
-          <span id="branchBadge" class="badge bg-light text-dark border p-2 fs-6"></span>
+          <span id="branchBadge" class="badge bg-light text-dark border p-2 fs-6">บอร์ดหน้าร้าน (206)</span>
         </div>
       </div>
 
@@ -67,82 +58,32 @@
   </div>
 
   <script>
-    // 🔗 ลิงก์ API ยิงตรงไปหน้า Google Apps Script ของพี่
+    // 🔗 ท่อเชื่อมต่อหลักดึงข้อมูลสเปรดชีต
     const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbyV0QpVn57ylj4nZ-dMoByFXcVXPB3gxsW159mVex7fdk7IMye7y3CdsiIX0tswIEtL/exec"; 
     
     let currentLossRawData = [];
     let globalLossPrintData = []; 
     let currentQueueData = [];
-    let MY_BRANCH = "";
+    let MY_BRANCH = "206";
 
     let storedQueue = localStorage.getItem('printedQueueIds') || '[]';
     let printedQueueIds = new Set(JSON.parse(storedQueue));
 
     document.addEventListener("DOMContentLoaded", function() {
-      // ดักจับและจดจำรหัสสาขาอัตโนมัติผ่านพารามิเตอร์ลิงก์
+      // ตรวจจับระบบรหัสสาขาอัตโนมัติจาก URL เพื่อแยกข้อมูลพนักงานหน้าร้าน
       const urlParams = new URLSearchParams(window.location.search);
       const branchFromUrl = urlParams.get('branch');
+      
       if (branchFromUrl) {
         localStorage.setItem('f16_branch_code', branchFromUrl.trim().toUpperCase());
-        localStorage.setItem('owndays_staff', 'Auto Login');
       }
-      checkAuth();
+      
+      MY_BRANCH = localStorage.getItem('f16_branch_code') || "206";
+      document.getElementById("branchBadge").textContent = `บอร์ดหน้าร้าน (${MY_BRANCH})`;
+
+      refreshDataLogic();
+      setInterval(refreshDataLogic, 5000); // วนลูปเช็คคิวเพื่อออโต้ปริ้นทุก 5 วินาที
     });
-
-    function checkAuth() {
-      MY_BRANCH = localStorage.getItem('f16_branch_code');
-      let cachedStaff = localStorage.getItem('owndays_staff');
-
-      if (MY_BRANCH && cachedStaff) {
-        document.getElementById("loginBox").style.display = "none";
-        document.getElementById("main").style.display = "block";
-        document.getElementById("branchBadge").textContent = `สตาฟ: ${cachedStaff} (${MY_BRANCH})`;
-        
-        refreshDataLogic();
-        setInterval(refreshDataLogic, 5000); // เช็คคิวออโต้เพื่อสั่งปริ้นทุก ๆ 5 วินาที
-      } else {
-        document.getElementById("loginBox").style.display = "block";
-        document.getElementById("main").style.display = "none";
-      }
-    }
-
-    // 🌐 ฟังก์ชัน Sign In ยิงผ่านระบบ JSONP แบบข้ามความปลอดภัยของ Chrome
-    function login() {
-      const b = document.getElementById("branchCodeInput").value.trim();
-      const s = document.getElementById("staffIdInput").value.trim();
-      if(!b || !s) { alert("กรุณากรอกข้อมูลให้ครบครับ"); return; }
-
-      const btn = document.getElementById("loginBtn");
-      btn.innerHTML = "กำลังตรวจสอบ... ⏳";
-      btn.disabled = true;
-
-      window.handleLoginResponse = function(res) {
-        if (res && res.status === "success") {
-          localStorage.setItem('f16_branch_code', b.toUpperCase());
-          localStorage.setItem('owndays_staff', res.staffName);
-          checkAuth();
-        } else {
-          alert(res ? res.message : "ไม่พบรหัสผู้ใช้งานนี้ในระบบ");
-          btn.innerHTML = "Sign In";
-          btn.disabled = false;
-        }
-        let script = document.getElementById('jsonpAuthCall');
-        if (script) script.remove();
-      };
-
-      let script = document.createElement('script');
-      script.id = 'jsonpAuthCall';
-      script.src = `${GOOGLE_API_URL}?action=verifyStaff&branch=${b}&staffId=${s}&callback=handleLoginResponse&ts=${new Date().getTime()}`;
-      document.body.appendChild(script);
-    }
-
-    function logoutAndClear() {
-      if(confirm("ออกจากระบบ?")) {
-        localStorage.removeItem('f16_branch_code');
-        localStorage.removeItem('owndays_staff');
-        location.reload();
-      }
-    }
     
     function switchTab(tabId, btn) { 
         document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); 
@@ -151,7 +92,7 @@
         btn.classList.add('active'); 
     }
 
-    // 🌐 ท่อหลักดึงข้อมูลตารางคิวและประวัติ Loss Lens แบบเรียลไทม์
+    // 🌐 ระบบดึงข้อมูลผ่านเทคนิค JSONP ทลายบล็อก CORS เบราว์เซอร์ทุกเวอร์ชัน ข้อมูลตารางมาทันทีแน่นอน
     function refreshDataLogic() {
       const oldScript = document.getElementById('jsonpDataCall');
       if (oldScript) oldScript.remove();
@@ -161,7 +102,7 @@
           currentQueueData = d.queue || [];
           currentLossRawData = d.lossPrintJob || [];
           
-          // ตรวจสอบคิวเปิดใหม่หน้าร้านเพื่อยิงคำสั่งปริ้น
+          // ระบบจับคิวใหม่เพื่อยิงสั่งออโต้ปริ้นหน้าร้าน
           currentQueueData.forEach(i => { 
               if(!printedQueueIds.has(i.queueId)){ 
                   printedQueueIds.add(i.queueId); 
@@ -188,7 +129,7 @@
       const div = document.getElementById("list");
       if(!list.length){ div.innerHTML = `<p class="text-center py-4 text-muted">ไม่มีคิวหน้าร้านสำหรับสาขานี้</p>`; return; }
       
-      let html = `<table class="table align-middle"><thead class="table-light"><tr><th>คิว</th><th>ลูกค้า</th><th>รุ่น</th><th>บริการ</th><th>status</th></tr></thead><tbody>`;
+      let html = `<table class="table align-middle"><thead class="table-light"><tr><th>คิว</th><th>ลูกค้า</th><th>รุ่น</th><th>บริการ</th><th>สถานะ</th></tr></thead><tbody>`;
       html += list.map(i => {
         return `<tr><td class="fw-bold fs-4">${i.queueNumber}</td><td><b>${i.name}</b><br><small>${i.phone}</small></td><td>${i.model}</td><td>${i.service}</td><td><span class="badge bg-danger">${i.status}</span></td></tr>`;
       }).join("");
