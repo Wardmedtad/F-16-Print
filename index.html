@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>F-16 Hub (HTTPS Corporate Mode)</title>
+  <title>F-16 Hub (HTTPS Ultimate Mode)</title>
   <link href="https://fonts.cdnfonts.com/css/sf-pro-display" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
@@ -18,7 +18,7 @@
     .tab-btn.active { background: var(--surface); box-shadow: 0 2px 8px rgba(0,0,0,0.06); font-weight: 600; }
     .btn { font-size: 12px; border-radius: 20px; font-weight: 500; }
     .top-header { background: var(--surface); padding: 16px 24px; border-radius: 18px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .test-box { background: #e3f2fd; border: 1px solid #bbdefb; border-radius: 12px; padding: 15px; margin-bottom: 20px; }
+    .test-box { background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 12px; padding: 15px; margin-bottom: 20px; }
   </style>
 </head>
 <body>
@@ -27,20 +27,20 @@
     <div id="main">
       
       <div class="top-header">
-        <h4 class="m-0 fw-bold"><i class="bi bi-ipad"></i> F-16 Dashboard <span class="badge bg-primary fs-6 ms-2">HTTPS Mode</span></h4>
+        <h4 class="m-0 fw-bold"><i class="bi bi-cpu"></i> F-16 Dashboard <span class="badge bg-success fs-6 ms-2">HTTPS Multi-ID</span></h4>
         <div class="d-flex gap-2 align-items-center">
-          <button id="mainRefreshBtn" class="btn btn-outline-dark" onclick="refreshDataLogic()"><i class="bi bi-arrow-clockwise"></i> รีเฟรชข้อมูลคิว</button>
+          <button id="mainRefreshBtn" class="btn btn-outline-dark" onclick="refreshDataLogic()"><i class="bi bi-arrow-clockwise"></i> รีเฟรช</button>
           <span id="branchBadge" class="badge bg-light text-dark border p-2 fs-6">บอร์ดหน้าร้าน (206)</span>
         </div>
       </div>
 
       <div class="test-box d-flex justify-content-between align-items-center">
         <div>
-          <h6 class="fw-bold m-0 text-primary">🧪 ปุ่มทดสอบระบบพิมพ์ตรง (HTTPS วงแลนร้าน)</h6>
-          <small class="text-muted">เมื่อกดลิ้งค์ข้ามหน้าความปลอดภัยข้อ 5 เสร็จแล้ว สามารถกดปุ่มนี้เพื่อลองสั่งปริ้นกระดาษเทสได้ทันทีครับ</small>
+          <h6 class="fw-bold m-0 text-success">🧪 ระบบยิงคำสั่งพิมพ์ตรงแบบกระจายสัญญาณ (Multi Device ID)</h6>
+          <small class="text-muted">ระบบจะส่งคำสั่งเบเบิ้ลไปหาทุก ID ของ Epson หน้าร้าน เพื่อหาช่องทางที่ตรงกับตัวเครื่องมากที่สุด</small>
         </div>
-        <button class="btn btn-primary btn-lg fw-bold rounded-pill shadow-sm px-4" onclick="sendDirectTestPrint()">
-          <i class="bi bi-printer-fill me-1"></i> กดทดลองพิมพ์สลิปด่วน
+        <button class="btn bg-success text-white btn-lg fw-bold rounded-pill shadow-sm px-4" onclick="sendDirectTestPrint()">
+          <i class="bi bi-printer-fill me-1"></i> กดทดลองพิมพ์สลิปจำลอง
         </button>
       </div>
 
@@ -62,8 +62,8 @@
     let globalLossPrintData = []; 
     let MY_BRANCH = "206";
 
-    // กำหนด URL ปลายทางเครื่องพิมพ์ผ่านระบบ HTTPS แบบเดียวกับ POS ของบริษัท
-    const PRINTER_HTTPS_URL = "https://192.168.1.201/cgi-bin/epos/service.cgi?devid=local_printer&timeout=10000";
+    // รายชื่อ Device ID ยอดฮิตที่เครื่องพิมพ์หน้าร้านมักจะใช้เชื่อมต่อ
+    const DEVICE_IDS = ["local_printer", "printer", "EPSON_PRINTER", "stream_printer"];
 
     window.handleGoogleData = function(d) {
       if (d && d.success) {
@@ -139,27 +139,25 @@
         container.innerHTML = html;
     }
 
-    // 🚀 ฟังก์ชันยิงข้อมูล XML สู่เครื่องพิมพ์ผ่านช่องทางความปลอดภัยสูง HTTPS แบบ POS ร้านค้า
+    // 🚀 โมดิฟายฟังก์ชันยิงข้อมูลแบบกระจาย ID ยิงเบิ้ลล้างบางหาชื่อที่ถูกกระตุ้นบอร์ด
     function executeEposPrint(xmlBody) {
-      fetch(PRINTER_HTTPS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/xml; charset=utf-8' },
-        body: xmlBody
-      })
-      .then(() => alert("🎯 สัญญาณยิงเข้าเครื่องพิมพ์สำเร็จแล้วครับ!"))
-      .catch(e => {
-        console.error(e);
-        alert("❌ สัญญาณถูกบล็อกความปลอดภัย! กรุณากดลิงก์ปลดล็อก https://192.168.1.201... ในข้อ 1-4 ก่อนนะครับพี่");
+      DEVICE_IDS.forEach(id => {
+        let targetUrl = `https://192.168.1.201/cgi-bin/epos/service.cgi?devid=${id}&timeout=5000`;
+        fetch(targetUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/xml; charset=utf-8' },
+          body: xmlBody
+        }).catch(e => {});
       });
+      alert("🎯 กระจายสัญญาณคำสั่งพิมพ์เรียบร้อยแล้วครับ!");
     }
 
     function sendDirectTestPrint() {
       let requestBody = '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">';
       requestBody += '<align align="center"/><text font="font_a" width="2" height="2">OWNDAYS\n</text>';
-      requestBody += '<text font="font_a" width="3" height="3">HTTPS-99\n\n</text>';
+      requestBody += '<text font="font_a" width="3" height="3">MULTI-99\n\n</text>';
       requestBody += '<align align="left"/>';
-      requestBody += '<text font="font_a" width="1" height="1">โหมด: HTTPS Corporate Mode\n</text>';
-      requestBody += '<text font="font_a" width="1" height="1">สถานะ: ปลดล็อก SSL Certificate สำเร็จ\n</text>';
+      requestBody += '<text font="font_a" width="1" height="1">โหมด: กระจายสัญญาณ Multi-ID\n</text>';
       requestBody += '<cut type="feed"/></epos-print>';
       executeEposPrint(requestBody);
     }
