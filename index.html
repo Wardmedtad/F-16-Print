@@ -285,4 +285,344 @@
               currentLossRawData = d.lossPrintJob || [];
               let lossPrintDelay = 0;
               currentLossRawData.forEach(item => { 
-                let uId
+                let uId = "LOSS_"+item.caseNo; 
+                if(!printedLossIds.has(uId)){ 
+                  printedLossIds.add(uId); 
+                  localStorage.setItem("printedLossIds", JSON.stringify([...printedLossIds])); 
+                  setTimeout(() => {
+                    printLossLensSlip(item); 
+                    document.getElementById("ding").play().catch(()=>{}); 
+                  }, lossPrintDelay);
+                  lossPrintDelay += 3000; 
+                } 
+              });
+              let newLossString = JSON.stringify(currentLossRawData);
+              if (newLossString !== lastLossString) {
+                if(document.getElementById('lossTab').classList.contains('active')) renderLossTable(currentLossRawData);
+                lastLossString = newLossString;
+              }
+
+              transferRawData = (d.transferData && d.transferData.transfers) ? d.transferData.transfers : []; 
+              let newTransferString = JSON.stringify(transferRawData);
+              if (newTransferString !== lastTransferString) {
+                if(document.getElementById('transferTab').classList.contains('active')) filterTransferTable();
+                lastTransferString = newTransferString;
+              }
+
+              reservationRawData = d.reservation || []; 
+              let newResString = JSON.stringify(reservationRawData);
+              if (newResString !== lastResString) {
+                if(document.getElementById('resTab').classList.contains('active')) renderReservationTable(reservationRawData);
+                lastResString = newResString;
+              }
+            }
+          } catch (e) {}
+        }
+        isSlowFetching = false;
+      }
+      setTimeout(slowOtherDataLoop, 30000); 
+    }
+
+    function renderTable(list) { 
+      const div = document.getElementById("list"); 
+      if(!list.length){ div.innerHTML = `<p class="text-center py-4">ไม่มีคิว</p>`; return; } 
+      div.innerHTML = `<table class="table align-middle"><thead class="table-light"><tr><th>คิว</th><th>ลูกค้า</th><th>รุ่น</th><th>บริการ</th><th>สถานะ</th><th class="text-center">จัดการ</th></tr></thead><tbody>${list.map(i => {
+        let qStatus = String(i.status).trim();
+        let bgStyle = "bg-secondary";
+        if (qStatus === "Pending") bgStyle = "bg-danger";
+        else if (qStatus === "Done") bgStyle = "bg-warning text-dark"; 
+        else if (qStatus === "Received" || qStatus === "รับแว่นแล้ว") bgStyle = "bg-success"; 
+        return `<tr><td class="fs-4 fw-bold">${i.queueNumber}</td><td><b>${i.name}</b><br><small>${i.phone}</small></td><td>${i.model}</td><td>${i.service}</td><td><span class="badge ${bgStyle}">${i.status}</span></td><td class="text-center"><button class="btn btn-sm btn-outline-dark rounded-pill px-3 me-1" onclick="triggerManualPrint('${i.queueId}')">รีปริ้น</button><button class="btn btn-sm btn-warning text-dark rounded-pill px-3 me-1" onclick="upd('${i.queueId}','Done')">เสร็จ</button><button class="btn btn-sm btn-success rounded-pill px-3" onclick="upd('${i.queueId}','รับแว่นแล้ว')">รับแล้ว</button></td></tr>`;
+      }).join("")}</tbody></table>`; 
+    }
+    
+    function triggerManualPrint(id) { const i = currentQueueData.find(q => q.queueId === id); if(i) manualPrint(i); }
+    
+    // 🖨️ [ฟอนต์อัปเดตใหม่ หนาใหญ่ขึ้นกว่าเดิม] ขยายความกว้างตัวอักษรของเนื้อหาสลิปคิวเป็นสเกล (2,1)
+    function manualPrint(i){ 
+      if (!posPrinter) return alert("❌ เครื่องพิมพ์ไม่พร้อมทำงาน โปรดตรวจสอบวงสัญญาณ Wi-Fi");
+      
+      const timeStr = i.pickupTime ? new Date(i.pickupTime).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) : "-"; 
+      let serviceArr = (i.service || '-').split(',').map(s => s.trim()).filter(Boolean);
+
+      if (posPrinter.addTextLang) posPrinter.addTextLang('th');
+
+      // ส่วนสลิปที่ 1 (ร้านค้า)
+      posPrinter.addTextAlign(posPrinter.ALIGN_CENTER);
+      posPrinter.addTextSize(2, 2);
+      posPrinter.addText("OWNDAYS\n");
+      posPrinter.addTextSize(2, 1); // ขยายฟอนต์หนากว้างขึ้น
+      posPrinter.addText("บัตรคิว (สำหรับร้านค้า)\n\n");
+      posPrinter.addTextSize(4, 4);
+      posPrinter.addText(i.queueNumber + "\n\n");
+      posPrinter.addTextSize(2, 1); // ขยายฟอนต์หนากว้างขึ้น
+      posPrinter.addText("นัดรับ " + timeStr + " น.\n");
+      posPrinter.addText("--------------------------------\n");
+      posPrinter.addTextAlign(posPrinter.ALIGN_LEFT);
+      posPrinter.addText("ชื่อลูกค้า: คุณ " + (i.name || '-') + "\n");
+      posPrinter.addText("รุ่น: " + (i.model || '-') + "\n");
+      posPrinter.addText("บริการ:\n");
+      serviceArr.forEach(s => posPrinter.addText("- " + s + "\n"));
+      posPrinter.addFeedUnit(16);
+      posPrinter.addCut(posPrinter.CUT_FEED);
+
+      // ส่วนสลิปที่ 2 (ลูกค้า)
+      posPrinter.addTextAlign(posPrinter.ALIGN_CENTER);
+      posPrinter.addTextSize(2, 2);
+      posPrinter.addText("OWNDAYS\n");
+      posPrinter.addTextSize(2, 1); // ขยายฟอนต์หนากว้างขึ้น
+      posPrinter.addText("บัตรคิว (สำหรับลูกค้า)\n\n");
+      posPrinter.addTextSize(4, 4);
+      posPrinter.addText(i.queueNumber + "\n\n");
+      posPrinter.addTextSize(2, 1); // ขยายฟอนต์หนากว้างขึ้น
+      posPrinter.addText("นัดรับ " + timeStr + " น.\n");
+      posPrinter.addText("--------------------------------\n");
+      posPrinter.addTextAlign(posPrinter.ALIGN_LEFT);
+      posPrinter.addText("ชื่อลูกค้า: คุณ " + (i.name || '-') + "\n");
+      posPrinter.addText("รุ่น: " + (i.model || '-') + "\n");
+      posPrinter.addText("บริการ:\n");
+      serviceArr.forEach(s => posPrinter.addText("- " + s + "\n"));
+      posPrinter.addFeedUnit(16);
+      posPrinter.addCut(posPrinter.CUT_FEED);
+
+      posPrinter.send();
+    }
+    
+    async function upd(id, st){ try{ await runBackend('updateStatus', id, st, localStorage.getItem('owndays_staff'), localStorage.getItem('branchCode')||"206"); manualRefreshAll(); }catch(e){} }
+
+    function filterTransferTable() { const s = document.getElementById('searchTransfer').value.toLowerCase().trim(); renderTransferTable(s ? transferRawData.filter(r => (r.shop||"").toLowerCase().includes(s) || (r.model||"").toLowerCase().includes(s)) : transferRawData); }
+    
+    function renderTransferTable(data) { 
+      const t = document.getElementById('transferTableContainer'); 
+      if(!t) return; 
+      if(!data.length){ t.innerHTML = '<tr><td colspan="14" class="text-center py-4">ไม่มีรายการ Transfer</td></tr>'; return; } 
+      
+      let sortedData = [...data].reverse();
+      
+      t.innerHTML = sortedData.map(i => { 
+        let cSt = (i.status||"").replace(/<[^>]*>/g, '').trim(), bg = "bg-secondary", dis = 'disabled style="opacity:0.5;"'; 
+        let sHtml = `<b>${i.toShop}</b><br><small class="text-muted">จาก: ${i.fromShop}</small>`; 
+        
+        if(cSt.includes("ยังไม่ได้โทร")){ bg="bg-danger"; }
+        else if(cSt.includes("รอส่งออก")) bg="bg-warning text-dark"; 
+        else if(cSt.includes("รอรับ")) { bg="bg-info text-dark"; dis=''; } 
+        else if(cSt.includes("สำเร็จ")||cSt.includes("รับแล้ว")) bg="bg-success"; 
+        
+        let rBtn = cSt.includes("สำเร็จ")||cSt.includes("รับแล้ว") ? `<button class="btn btn-sm btn-secondary px-2" disabled>รับแล้ว</button>` : `<button class="btn btn-sm btn-primary px-2" onclick="receiveTransferDirectly('${i.id}')" ${dis}>รับแว่น</button>`; 
+        
+        return `<tr>
+          <td>${i.date}</td>
+          <td><span class="badge bg-light text-dark">${i.transferType}</span></td>
+          <td>${sHtml}</td>
+          <td>${i.staff}</td>
+          <td>${i.qr||'-'}</td>
+          <td class="fw-bold">${i.model}</td>
+          <td>${i.attention}</td>
+          <td>${i.cxId||'-'}</td>
+          <td>${i.cxCase||'-'}</td>
+          <td>${i.trackingNo||'-'}</td>
+          <td>${i.time}</td>
+          <td><span class="status-badge ${bg} status-clickable" onclick="openTransferManageModal('${i.id}')">${cSt}</span></td>
+          <td>${i.staffReceive||'-'}</td>
+          <td class="text-center"><div class="d-flex gap-1 justify-content-center"><button class="btn btn-sm btn-outline-dark px-2" onclick="printTransfer('${i.id}')"><i class="bi bi-printer"></i></button>${rBtn}</div></td>
+        </tr>`; 
+      }).join(""); 
+    }
+    
+    function openTransferManageModal(id) { let r = transferRawData.find(i => i.id == id); if(!r) return; document.getElementById('editTransferId').value = id; document.getElementById('editTransferSheet').value = r.sheetNameUsed; let cb = localStorage.getItem('branchCode'); document.getElementById('editTransferBranch').value = cb + (MASTER_BRANCH_MAP[cb]?" "+MASTER_BRANCH_MAP[cb]:"") || r.fromShop; document.getElementById('editTransferDest').value = r.toShop; renderPills('staffPillContainer', MASTER_STAFF_MAP[cb]||[], r.staff, 'editTransferStaff'); let destId = (r.toShop||"").split(" ")[0]; renderPills('attentionPillContainer', MASTER_STAFF_MAP[destId]||[], r.attention, 'editTransferAttention'); let trackVal = r.trackingNo||""; let courierSelect = document.getElementById('editTransferCourier'); courierSelect.value = "-- ไม่ระบุ/ส่งเอง --"; ['Kerry','Flash','J&T','EMS'].forEach(c => { if(trackVal.startsWith(c)){ courierSelect.value = c; trackVal = trackVal.replace(c,"").trim(); } }); document.getElementById('editTransferTracking').value = trackVal; if(bootstrapTransferModal) bootstrapTransferModal.show(); }
+    function renderPills(cId, list, sVal, hId) { document.getElementById(cId).innerHTML = list.length===0 ? '<span class="text-muted" style="font-size:11px;">ไม่มีข้อมูล</span>' : list.map(v => `<div class="pill-btn ${v===sVal?'selected':''}" onclick="selectPill(this, '${cId}', '${hId}', '${v}')">${v}</div>`).join(""); document.getElementById(hId).value = sVal||''; }
+    function selectPill(btn, cId, hId, val) { document.querySelectorAll(`#${cId} .pill-btn`).forEach(el=>el.classList.remove('selected')); btn.classList.add('selected'); document.getElementById(hId).value = val; }
+    async function saveTransferModal() { let id=document.getElementById('editTransferId').value, s=document.getElementById('editTransferSheet').value, d=document.getElementById('editTransferDest').value, st=document.getElementById('editTransferStaff').value, a=document.getElementById('editTransferAttention').value, c=document.getElementById('editTransferCourier').value, t=document.getElementById('editTransferTracking').value; if(!st) return alert("เลือกพนักงานด้วยครับ"); let btn=document.querySelector('#transferEditModal .btn-primary'); btn.disabled=true; btn.innerHTML='บันทึก...'; try{ await runBackend('updateTransferDetails',id,s,d,st,a,c,t); if(bootstrapTransferModal) bootstrapTransferModal.hide(); manualRefreshAll(); }catch(e){} btn.disabled=false; btn.innerHTML='บันทึกข้อมูล'; }
+    async function receiveTransferFromModal() { let id=document.getElementById('editTransferId').value; if(bootstrapTransferModal) bootstrapTransferModal.hide(); receiveTransferDirectly(id); }
+    async function receiveTransferDirectly(id) { if(confirm("ยืนยันรับพัสดุ?")) { try{ await runBackend('confirmReceiveGlasses', id, localStorage.getItem('owndays_staff')||"Staff", ""); manualRefreshAll(); }catch(e){} } }
+    
+    // 🖨️ [ฟอนต์อัปเดตใหม่ หนาใหญ่ขึ้นกว่าเดิม] ขยายฟอนต์รายละเอียดบิลสาขาคู่ค้า Transfer เป็นสเกล (2,1)
+    function printTransfer(id) { 
+      let r = transferRawData.find(i => i.id == id); if (!r) return; 
+      if (!posPrinter) return alert("❌ เครื่องพิมพ์ไม่พร้อมทำงาน");
+
+      let tB = r.transferType.toUpperCase()==="IN" ? '▼ IN (รับเข้า) ▼' : '▲ OUT (ส่งออก) ▲'; 
+      if (posPrinter.addTextLang) posPrinter.addTextLang('th');
+
+      posPrinter.addTextAlign(posPrinter.ALIGN_CENTER);
+      posPrinter.addTextSize(2, 2);
+      posPrinter.addText("TRANSFER SLIP\n");
+      posPrinter.addTextSize(2, 1);
+      posPrinter.addText(tB + "\n\n");
+
+      posPrinter.addTextAlign(posPrinter.ALIGN_LEFT);
+      posPrinter.addTextSize(2, 1); // ขยายฟอนต์เนื้อหารายละเอียด
+      posPrinter.addText("วันที่: " + r.date + "\n");
+      posPrinter.addText("ต้นทาง: " + r.fromShop + "\n");
+      posPrinter.addText("ปลายทาง: " + r.toShop + "\n");
+      posPrinter.addText("พนักงาน: " + r.staff + "\n");
+      posPrinter.addText("QR/JAN: " + r.qr + "\n");
+      posPrinter.addText("---------------------\n");
+      
+      posPrinter.addTextAlign(posPrinter.ALIGN_CENTER);
+      posPrinter.addTextSize(2, 2);
+      posPrinter.addText(r.model + "\n");
+      
+      posPrinter.addTextAlign(posPrinter.ALIGN_LEFT);
+      posPrinter.addTextSize(2, 1);
+      posPrinter.addText("---------------------\n");
+      posPrinter.addText("Attention: " + r.attention + "\n");
+      posPrinter.addText("CX ID: " + (r.cxId || '-') + "\n");
+      posPrinter.addText("อาการ: " + (r.cxCase || '-') + "\n");
+      posPrinter.addText("Tracking: " + (r.trackingNo || '-') + "\n");
+      posPrinter.addText("สถานะ: " + r.status + "\n");
+      
+      posPrinter.addFeedUnit(16);
+      posPrinter.addCut(posPrinter.CUT_FEED);
+      posPrinter.send();
+    }
+
+    function renderReservationTable(data) { 
+      const b = document.getElementById('resDashBody'); 
+      if(!data.length){ b.innerHTML = '<tr><td colspan="7" class="text-center py-4">ไม่มีข้อมูลใบจอง</td></tr>'; return; } 
+      
+      let sortedData = [...data].reverse();
+      
+      b.innerHTML = sortedData.map(i => { 
+        let bg="bg-dark", dis='disabled style="opacity:0.4;"'; 
+        if(i.stockStatus==="มีสินค้า"){ bg="bg-success"; dis=""; }
+        else if(i.stockStatus==="รอดำเนินการ") bg="bg-warning text-dark"; 
+        else if(i.stockStatus==="ของหมด"){ bg="bg-danger"; dis=""; } 
+        
+        let dHtml = i.stockStatus==="มีสินค้า" && i.expiryDate!=="-" ? `<br><small class="text-success" style="font-size:10px;">${i.stockInDate}</small><br><small class="text-danger fw-bold" style="font-size:10px;">⏳ ${i.expiryDate}</small>` : ""; 
+        let sHtml = `<select class="inline-select ${bg}" style="background-color:transparent;" onchange="changeStockStatusDirect('${i.id}', this.value)"><option style="color:#000;" value="รอดำเนินการ" ${i.stockStatus==='รอดำเนินการ'?'selected':''}>รอดำเนินการ</option><option style="color:#000;" value="มีสินค้า" ${i.stockStatus==='มีสินค้า'?'selected':''}>มีสินค้า</option><option style="color:#000;" value="ของหมด" ${i.stockStatus==='ของหมด'?'selected':''}>ของหมด</option></select>`; 
+        return `<tr><td><b>${i.id}</b><br><small class="text-muted">${i.time}</small></td><td><span class="badge bg-info text-dark border">${i.type}</span></td><td>${i.name}<br><small class="text-muted">${i.phone}</small></td><td><b class="text-primary">${i.model1}</b></td><td><div class="badge ${bg} p-1">${sHtml}</div>${dHtml}</td><td><button class="btn btn-sm btn-outline-primary rounded-pill px-2" onclick="notifyCustomer('${i.id}')" ${dis}>แจ้งลูกค้า</button></td><td class="text-center"><div class="d-flex gap-1 justify-content-center"><button class="btn btn-sm btn-primary rounded-pill px-2" onclick="printReservationDouble('${i.id}')">ปริ้นบิล</button><button class="btn btn-sm btn-success rounded-pill px-2" onclick="finishBooking('${i.id}')">จบงาน</button></div></td></tr>`; 
+      }).join(""); 
+    }
+    
+    function filterResTable() { const txt = document.getElementById('phoneSearch').value.toLowerCase().trim(); renderReservationTable(txt ? reservationRawData.filter(i => i.id.toLowerCase().includes(txt) || i.name.toLowerCase().includes(txt) || i.phone.includes(txt)) : reservationRawData); }
+    async function changeStockStatusDirect(id, val) { document.getElementById('mainRefreshBtn').innerHTML = 'โหลด...'; try{ await runBackend('updateBookingStatus', id, 'stock', val); manualRefreshAll(); }catch(e){} }
+    async function notifyCustomer(id) { if(confirm("ส่งอีเมลแจ้งลูกค้า?")){ try{ await runBackend('sendPickupNotification', id, localStorage.getItem('owndays_staff')||"Staff"); alert("ส่งสำเร็จ!"); }catch(e){} } }
+    async function finishBooking(id) { if(confirm("เปลี่ยนสถานะเป็นจบงาน?")){ try{ await runBackend('confirmPickup', id, localStorage.getItem('owndays_staff')||"Staff"); manualRefreshAll(); }catch(e){} } }
+    
+    // 🖨️ [ฟอนต์อัปเดตใหม่ หนาใหญ่ขึ้นกว่าเดิม] ขยายฟอนต์เนื้อหารายละเอียดใบจองสินค้าหน้าร้านคู่ขนานเป็นสเกล (2,1)
+    function printReservationDouble(id) { 
+      const i = reservationRawData.find(x => x.id === id); if(!i) return; 
+      if (!posPrinter) return alert("❌ เครื่องพิมพ์ไม่พร้อมทำงาน");
+
+      let activeStaffName = localStorage.getItem('owndays_staff') || "......................";
+      let currentBranchCode = String(id).split("-")[0].toUpperCase();
+      let branchPhone = MASTER_PHONE_MAP[currentBranchCode] || "......................";
+      
+      if (posPrinter.addTextLang) posPrinter.addTextLang('th');
+
+      // ใบจองสลิปส่วนที่ 1 สำหรับร้านค้า
+      posPrinter.addTextAlign(posPrinter.ALIGN_CENTER);
+      posPrinter.addTextSize(2, 2);
+      posPrinter.addText("OWNDAYS\n");
+      posPrinter.addTextSize(2, 1);
+      posPrinter.addText("สาขา " + (i.branchName || 'OWNDAYS') + "\n");
+      posPrinter.addText("ใบจอง (สำหรับร้าน)\n");
+      posPrinter.addText("---------------------\n");
+      posPrinter.addTextAlign(posPrinter.ALIGN_LEFT);
+      posPrinter.addText("เลขที่จอง: " + i.id + "\n");
+      posPrinter.addText("วันที่: " + (i.time || '-') + "\n");
+      posPrinter.addText("ลูกค้า: คุณ " + i.name + "\n");
+      posPrinter.addText("เบอร์โทร: " + i.phone + "\n");
+      posPrinter.addText("รายการสินค้าที่จอง:\n");
+      posPrinter.addTextAlign(posPrinter.ALIGN_CENTER);
+      posPrinter.addTextSize(2, 1);
+      posPrinter.addText("[" + i.model1 + "]\n");
+      posPrinter.addTextSize(2, 1);
+      posPrinter.addTextAlign(posPrinter.ALIGN_LEFT);
+      posPrinter.addText("---------------------\n");
+      posPrinter.addText("[ บันทึกจัดการภายในร้าน ]\n");
+      posPrinter.addText("[  ] โทรแจ้งแล้ว\n[  ] เมลระบบแล้ว\n");
+      posPrinter.addText("ผู้รับจอง: " + activeStaffName + "\n\n");
+      posPrinter.addTextAlign(posPrinter.ALIGN_CENTER);
+      posPrinter.addText("..........................\n");
+      posPrinter.addText("ลงชื่อ ( พนักงาน )\n");
+      posPrinter.addFeedUnit(16);
+      posPrinter.addCut(posPrinter.CUT_FEED);
+
+      // ใบจองสลิปส่วนที่ 2 สำหรับลูกค้า
+      posPrinter.addTextAlign(posPrinter.ALIGN_CENTER);
+      posPrinter.addTextSize(2, 2);
+      posPrinter.addText("OWNDAYS\n");
+      posPrinter.addTextSize(2, 1);
+      posPrinter.addText("สาขา " + (i.branchName || 'OWNDAYS') + "\n");
+      posPrinter.addText("ใบจอง (สำหรับลูกค้า)\n");
+      posPrinter.addText("---------------------\n");
+      posPrinter.addTextAlign(posPrinter.ALIGN_LEFT);
+      posPrinter.addText("เลขที่จอง: " + i.id + "\n");
+      posPrinter.addText("วันที่ทำรายการ: " + (i.time || '-') + "\n");
+      posPrinter.addText("ชื่อ: คุณ " + i.name + "\n");
+      posPrinter.addText("เบอร์โทรลูกค้า: " + i.phone + "\n");
+      posPrinter.addText("รายการสินค้าที่จอง:\n");
+      posPrinter.addTextAlign(posPrinter.ALIGN_CENTER);
+      posPrinter.addTextSize(2, 1);
+      posPrinter.addText("[" + i.model1 + "]\n");
+      posPrinter.addTextSize(2, 1);
+      posPrinter.addTextAlign(posPrinter.ALIGN_LEFT);
+      posPrinter.addText("---------------------\n");
+      posPrinter.addText("📞 เบอร์โทรสาขา: " + branchPhone + "\n");
+      posPrinter.addText("💡 หมายเหตุ: หากมีสถานะเพิ่มเติมจะแจ้ง\n");
+      posPrinter.addText("ไปทาง E-mail หรือติดต่อสอบถามตามเบอร์\n\n");
+      posPrinter.addTextAlign(posPrinter.ALIGN_CENTER);
+      posPrinter.addText("..........................\n");
+      posPrinter.addText("ลงชื่อ ( ลูกค้า )\n");
+      posPrinter.addFeedUnit(16);
+      posPrinter.addCut(posPrinter.CUT_FEED);
+
+      posPrinter.send();
+    }
+
+    function renderLossTable(data) { const container = document.getElementById('lossHistoryList'); if(!container) return; if (!data || data.length === 0) { container.innerHTML = `<div class="text-center py-4 text-muted">ไม่มีประวัติ Loss Lens ของสาขาในชีต</div>`; return; } let revData = [...data].reverse(); container.innerHTML = `<table class="table table-hover align-middle"><thead class="table-light"><tr><th>CASE NO.</th><th>Customer ID</th><th>Claim Date</th><th>Reason</th><th>Lens Type</th><th>Staff ID</th><th class="text-center">ปริ้น (แนวตั้ง)</th></tr></thead><tbody>${revData.map(i => `<tr><td class="fw-bold">${i.caseNo}</td><td>${i.customerId}</td><td>${i.claimDate}</td><td><span class="badge bg-danger">${i.reason}</span></td><td class="text-primary fw-bold">${i.lensType}</td><td>${i.staffId || i.staffName || '-'}</td><td class="text-center"><button class="btn btn-sm btn-outline-dark rounded-circle" onclick='printLossLensSlip(${JSON.stringify(i).replace(/'/g, "&#39;")})'><i class="bi bi-printer"></i></button></td></tr>`).join("")}</tbody></table>`; }
+
+    // 🖨️ [ฟอนต์อัปเดตใหม่ หนาใหญ่ขึ้นกว่าเดิม] ขยายขนาดตัวหนังสือรายงานสลิป Loss Lens เป็นสเกล (2,1) ทั้งบิล
+    function printLossLensSlip(data) {
+      if (!posPrinter) return; 
+      
+      if (posPrinter.addTextLang) posPrinter.addTextLang('th');
+
+      posPrinter.addTextAlign(posPrinter.ALIGN_CENTER);
+      posPrinter.addTextSize(2, 2);
+      posPrinter.addText((data.reason || 'LOSS LENS') + "\n");
+      posPrinter.addTextSize(2, 2);
+      posPrinter.addText("[" + (data.caseNo || '-') + "]\n\n");
+      
+      posPrinter.addTextAlign(posPrinter.ALIGN_LEFT);
+      posPrinter.addTextSize(2, 1); // ขยายฟอนต์เนื้อหารายงานเลนส์เสีย
+      posPrinter.addText("Customer ID: " + (data.customerId || '-') + "\n");
+      posPrinter.addText("Duration: " + (data.duration || '-') + "\n");
+      posPrinter.addText("Purchase Date: " + (data.purchaseDate || '-') + "\n");
+      posPrinter.addText("Claim Date: " + (data.claimDate || '-') + "\n");
+      posPrinter.addText("QTY: " + (data.qty || '1') + "\n");
+      posPrinter.addText("Lens Type: " + (data.lensType || '-') + "\n");
+      posPrinter.addText("Staff ID: " + (data.staffId || '-') + "\n");
+      posPrinter.addText("Loss Sale: " + (data.lossSale || '-') + "\n");
+      posPrinter.addText("Loss Cost: " + (data.lossCost || '-') + "\n");
+      posPrinter.addText("Staff Grade: " + (data.staffGrade || '-') + "\n");
+      posPrinter.addText("ผู้บันทึก: " + (data.staffName || '-') + "\n");
+      posPrinter.addText("Note: " + (data.note || '-') + "\n");
+      posPrinter.addText("---------------------\n");
+      posPrinter.addTextAlign(posPrinter.ALIGN_CENTER);
+      posPrinter.addText("OWNDAYS OPERATION\n");
+
+      posPrinter.addFeedUnit(16);
+      posPrinter.addCut(posPrinter.CUT_FEED);
+      posPrinter.send();
+    }
+    
+    function forcePrintLastLoss() { if(currentLossRawData.length > 0) { printLossLensSlip(currentLossRawData[currentLossRawData.length - 1]); } else { alert("ไม่มีประวัติให้ปริ้นครับ"); } }
+
+    function exportLossToExcel() {
+      if (!currentLossRawData || currentLossRawData.length === 0) { alert("❌ ไม่มีข้อมูลประวัติ Loss Lens ของสาขานี้ให้ดาวน์โหลดครับ"); return; }
+      let activeBranch = localStorage.getItem('branchCode') || "Branch";
+      let formatData = currentLossRawData.map(item => ({ "CASE NO.": item.caseNo, "Customer ID": item.customerId, "Purchase Date": item.purchaseDate, "Claim Date": item.claimDate, "Duration": item.duration, "Reason of Loss": item.reason, "Lens Type": item.lensType, "QTY": item.qty, "Loss Sale": item.lossSale, "Loss Cost": item.lossCost, "Note": item.note, "Staff ID": item.staffId, "Staff Grade LV.": item.staffGrade, "Recorded By": item.staffName }));
+      let worksheet = XLSX.utils.json_to_sheet(formatData);
+      let workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Loss_Data");
+      XLSX.writeFile(workbook, `Loss_Lens_Report_${activeBranch}_${new Date().toLocaleDateString('th-TH').replace(/\//g, '-')}.xlsx`);
+    }
+
+    async function updNSInit(){ try{ const isOut = await runBackend('getNosepadStatus'); document.getElementById("nsToggle").checked = isOut; document.getElementById("nsText").innerHTML = isOut ? "❌ <span class='text-danger'>แป้นจมูกหมด</span>" : "✅ <span class='text-success'>แป้นจมูกมี</span>"; }catch(e){} }
+    function updNS(el){ document.getElementById("nsText").innerHTML = el.checked ? "❌ <span class='text-danger'>แป้นจมูกหมด</span>" : "✅ <span class='text-success'>แป้นจมูกมี</span>"; runBackend('setNosepadStatus', el.checked); }
+  </script>
+</body>
+</html>
