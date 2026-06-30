@@ -3,13 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>F-16 Hub (LAN Testing Mode)</title>
+  <title>F-16 Hub</title>
+  
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="F-16 Hub">
+
   <link href="https://fonts.cdnfonts.com/css/sf-pro-display" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  
+  <script src="https://cdn.jsdelivr.net/gh/rubenruvalcabac/epson-epos-sdk-react@master/public/epos-2.17.0.js"></script>
+
   <style>
     :root { --primary: #1d1d1f; --bg: #f5f5f7; --surface: #ffffff; --border: #d2d2d7; }
-    body { background-color: var(--bg); color: var(--primary); font-size: 13px; font-family: 'SF Pro Display', sans-serif; }
+    body { background-color: var(--bg); color: var(--primary); font-size: 13px; font-family: 'SF Pro Display', sans-serif; padding-top: calc(env(safe-area-inset-top) + 10px); }
     .card, .tab-content { background: var(--surface); border-radius: 18px; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04); border: none; padding: 24px; }
     .tab-content { display: none !important; } .tab-content.active { display: block !important; animation: fadeIn 0.2s; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
@@ -17,158 +25,264 @@
     .tab-btn { background: transparent; border: none; border-radius: 8px; padding: 6px 16px; font-weight: 500; }
     .tab-btn.active { background: var(--surface); box-shadow: 0 2px 8px rgba(0,0,0,0.06); font-weight: 600; }
     .btn { font-size: 12px; border-radius: 20px; font-weight: 500; }
+    .form-control, .form-select { font-size: 13px; border-radius: 8px; border: 1px solid var(--border); padding: 10px; }
+    .table th { font-weight: 600; font-size: 10px; border-bottom: 1px solid var(--border); }
+    .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: inline-block; color: white; }
+    .status-clickable { cursor: pointer; transition: transform 0.1s; } .status-clickable:hover { transform: scale(1.05); }
     .top-header { background: var(--surface); padding: 16px 24px; border-radius: 18px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .test-panel { background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 14px; padding: 20px; margin-bottom: 20px; }
+    
+    .apple-login-container { max-width: 380px; margin: 80px auto; text-align: center; padding: 40px 30px; background: #fff; border-radius: 20px; }
+    .inline-select { border-radius: 12px; font-size: 11px; font-weight: 600; color: white; padding: 4px 20px 4px 10px; cursor: pointer; border: none; background-color: transparent; }
+    .inline-select option { color: #000; }
+    .pill-container { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+    .pill-btn { flex: 1 1 calc(25% - 8px); text-align: center; border: 1px solid #d2d2d7; border-radius: 6px; padding: 8px 4px; font-size: 12px; cursor: pointer; }
+    .pill-btn.selected { background-color: #1d1d1f; color: #fff; }
+    
+    #printArea { display: none; }
   </style>
 </head>
 <body>
+  <audio id="ding" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+  
+  <div id="printArea"></div>
 
-  <div class="container-fluid py-4" style="max-width: 1400px;">
-    <div id="main">
-      
+  <div id="mainWrapper" class="container-fluid py-4" style="max-width: 1400px;">
+    <div id="loginBox" class="apple-login-container" style="display: none;">
+      <h3 class="fw-bold mb-4">F-16 Hub</h3>
+      <input type="text" id="branchCodeInput" class="form-control mb-3 text-center" oninput="checkBranchName()" placeholder="รหัสสาขา (Branch Code)">
+      <div id="branchNameDisplay" class="mb-3 text-center fw-bold" style="font-size:12px; height: 15px;"></div>
+      <input type="password" id="staffIdInput" class="form-control mb-4 text-center" placeholder="รหัสผู้ใช้งาน (Staff ID)">
+      <button class="btn btn-dark w-100 py-2 fs-6" onclick="login()">Sign In</button>
+    </div>
+
+    <div id="main" style="display:none;">
       <div class="top-header">
-        <h4 class="m-0 fw-bold"><i class="bi bi-lan"></i> F-16 Dashboard <span class="badge bg-success fs-6 ms-2">LAN Mode</span></h4>
+        <h4 class="m-0 fw-bold"><i class="bi bi-display"></i> F-16 Dashboard <small id="epos-indicator" style="font-size:11px;" class="text-muted ms-2">(⏳ เครื่องพิมพ์กำลังเชื่อมต่อ...)</small></h4>
         <div class="d-flex gap-2 align-items-center">
-          <button id="mainRefreshBtn" class="btn btn-outline-dark" onclick="refreshDataLogic()"><i class="bi bi-arrow-clockwise"></i> รีเฟรช</button>
-          <span id="branchBadge" class="badge bg-light text-dark border p-2 fs-6">บอร์ดหน้าร้าน (206)</span>
-        </div>
-      </div>
-
-      <div class="test-panel shadow-sm">
-        <div class="row align-items-center">
-          <div class="col-md-7">
-            <h5 class="fw-bold text-success m-0"><i class="bi bi-lightning-charge-fill"></i> แท่นทดลองออกคิวจำลอง (ยิงตรงสาย LAN)</h5>
-            <p class="text-muted m-0 mt-1">ใช้สำหรับกดยิงทดสอบดูว่าสัญญาณ XML จะสั่งให้เครื่องพิมพ์ Epson หน้าร้านตัดกระดาษออกมาได้จริงไหม</p>
-          </div>
-          <div class="col-md-5 text-md-end mt-3 mt-md-0">
-            <button class="btn btn-success btn-lg rounded-pill fw-bold px-4 shadow-sm" onclick="clickToTestQueuePrint()">
-              <i class="bi bi-printer-fill me-1"></i> กดออกคิว "คุณทดสอบ" (เบอร์ 99)
-            </button>
-          </div>
+          <input type="checkbox" id="nsToggle" onchange="updNS(this)"> <label id="nsText" style="font-size:12px;" class="fw-bold me-2"></label>
+          <button id="mainRefreshBtn" class="btn btn-outline-dark" onclick="manualRefreshAll()"><i class="bi bi-arrow-clockwise"></i> รีเฟรช</button>
+          <button class="btn btn-danger" onclick="logoutAndClear()">LOG OUT</button>
+          <span id="sName" class="badge bg-light text-dark border p-2 fs-6 ms-2"></span>
         </div>
       </div>
 
       <ul class="nav nav-tabs">
         <button class="tab-btn active" onclick="switchTab('queueTab', this)">คิวหน้าร้าน</button>
+        <button class="tab-btn" onclick="switchTab('transferTab', this)">Transfer</button>
+        <button class="tab-btn" onclick="switchTab('resTab', this)">สินค้าจอง</button>
         <button class="tab-btn" onclick="switchTab('lossTab', this)">Loss Lens</button>
       </ul>
 
-      <div id="queueTab" class="tab-content active"><div id="list" class="table-responsive"><p class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>กำลังดึงข้อมูลคิวสด...</p></div></div>
-      <div id="lossTab" class="tab-content"><div id="lossHistoryList" class="table-responsive bg-white rounded p-2"></div></div>
+      <div id="queueTab" class="tab-content active"><div id="list" class="table-responsive"></div></div>
+      
+      <div id="transferTab" class="tab-content">
+        <div class="d-flex justify-content-between mb-4"><h5 class="fw-bold m-0">Transfer </h5><input type="text" id="searchTransfer" class="form-control w-25" placeholder="🔍 ค้นหา..." onkeyup="filterTransferTable()"></div>
+        <div class="table-responsive"><table class="table"><thead><tr><th>วันที่</th><th>ประเภท</th><th>ไป (คู่ค้า)</th><th>โดย</th><th>QR</th><th>MODEL</th><th>ATTENTION</th><th>CX ID</th><th>อาการ</th><th>TRACKING</th><th>เวลา</th><th>สถานะ</th><th>ผู้รับ</th><th class="text-center">จัดการ</th></tr></thead><tbody id="transferTableContainer"></tbody></table></div>
+      </div>
+
+      <div id="resTab" class="tab-content">
+        <div class="d-flex justify-content-between mb-4"><h5 class="fw-bold m-0">รายการสินค้าจอง</h5><input type="text" id="phoneSearch" class="form-control w-25" placeholder="🔍 ค้นหา..." onkeyup="filterResTable()"></div>
+        <div class="table-responsive"><table class="table"><thead><tr><th>ใบจอง/เวลา</th><th>ประเภท</th><th>ลูกค้า</th><th>สินค้า</th><th>สถานะสต็อก</th><th>แจ้งลูกค้า</th><th class="text-center">จัดการ</th></tr></thead><tbody id="resDashBody"></tbody></table></div>
+      </div>
+
+      <div id="lossTab" class="tab-content">
+        <div class="d-flex justify-content-between mb-4">
+          <h5 class="fw-bold m-0">📊 ประวัติบันทึก Loss Lens</h5>
+          <div class="d-flex gap-2">
+            <button class="btn btn-success fw-bold" onclick="exportLossToExcel()"><i class="bi bi-file-earmark-excel"></i> ดาวน์โหลด Excel (.xlsx)</button>
+            <button class="btn btn-dark" onclick="forcePrintLastLoss()">รีปริ้นรายการล่าสุด</button>
+          </div>
+        </div>
+        <div id="lossHistoryList" class="table-responsive bg-white rounded p-2"></div>
+      </div>
     </div> 
   </div>
 
+  <div class="modal fade" id="transferEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 500px;">
+      <div class="modal-content border-0" style="border-radius: 16px;">
+        <div class="modal-header pb-2"><h5 class="modal-title fw-bold">จัดการรายการ Transfer</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body pb-0" style="max-height: 70vh; overflow-y: auto;">
+          <input type="hidden" id="editTransferId"><input type="hidden" id="editTransferSheet">
+          <div class="mb-3"><div class="modal-section-title">สาขาของคุณ</div><input type="text" id="editTransferBranch" class="form-control bg-light" readonly></div>
+          <div class="mb-3"><div class="modal-section-title text-danger">พนักงานทำรายการ *</div><input type="hidden" id="editTransferStaff"><div id="staffPillContainer" class="pill-container"></div></div>
+          <div class="mb-3"><div class="modal-section-title">Destination (ปลายทาง)</div><select id="editTransferDest" class="form-select"><option value="">-- เลือก --</option></select></div>
+          <div class="mb-3"><div class="modal-section-title">Attention</div><input type="hidden" id="editTransferAttention"><div id="attentionPillContainer" class="pill-container"></div></div>
+          <div class="mb-3"><div class="modal-section-title">ขนส่ง (Courier)</div><select id="editTransferCourier" class="form-select"><option value="-- ไม่ระบุ/ส่งเอง --">-- ไม่ระบุ/ส่งเอง --</option><option value="Kerry">Kerry</option><option value="Flash">Flash</option><option value="J&T">J&T</option><option value="EMS">EMS</option></select></div>
+          <div class="mb-3"><div class="modal-section-title">เลข Tracking</div><input type="text" id="editTransferTracking" class="form-control"></div>
+        </div>
+        <div class="modal-footer justify-content-between bg-light" style="border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;">
+          <button class="btn btn-success fw-bold px-3 py-2" onclick="receiveTransferFromModal()">รับแว่นมาแล้ว</button>
+          <div class="d-flex gap-2"><button class="btn btn-outline-secondary fw-bold px-3 py-2" data-bs-dismiss="modal">ยกเลิก</button><button class="btn btn-primary fw-bold px-3 py-2" onclick="saveTransferModal()">บันทึกข้อมูล</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
   <script>
-    const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbyVRQ57HjFnACdW93BMS2sTp3fzp_kO2EhpsedFGQ-AiN0BkNvydZr_bj7EysNHzTy/exec"; 
-    let currentLossRawData = [];
-    let globalLossPrintData = []; 
-    let MY_BRANCH = "206";
+    let MASTER_BRANCH_MAP = {}, MASTER_STAFF_MAP = {}, MASTER_PHONE_MAP = {}; 
+    let reservationRawData = [], transferRawData = [], currentQueueData = [], currentLossRawData = [];
+    
+    let bootstrapTransferModal;
+    let isFastFetching = false;
+    let isSlowFetching = false;
+    let lastQueueString = "";
+    let lastLossString = "";
+    let lastTransferString = "";
+    let lastResString = "";
 
-    // สัญญาณพอร์ตและไอดีทั้งหมดที่ส่งขนานไปหาบอร์ดเอปสันหน้าร้าน
-    const PRINTER_ENDPOINTS = [
-      "https://192.168.1.201/cgi-bin/epos/service.cgi?devid=local_printer&timeout=5000",
-      "https://192.168.1.201/cgi-bin/epos/service.cgi?devid=printer&timeout=5000",
-      "http://192.168.1.201:8008/cgi-bin/epos/service.cgi?devid=local_printer&timeout=5000",
-      "http://192.168.1.201:8008/cgi-bin/epos/service.cgi?devid=printer&timeout=5000",
-      "http://192.168.1.201/cgi-bin/epos/service.cgi?devid=local_printer&timeout=5000"
-    ];
+    let printedQueueIds = new Set(JSON.parse(localStorage.getItem('printedQueueIds') || '[]'));
+    let printedLossIds = new Set(JSON.parse(localStorage.getItem('printedLossIds') || '[]'));
 
-    window.handleGoogleData = function(d) {
-      if (d && d.success) {
-        currentLossRawData = d.lossPrintJob || [];
-        renderQueueTable(d.queue || []);
-        renderLossTable(currentLossRawData);
-      }
-    };
+    // ⚙️ ล็อก IP เครื่องปริ้นเตอร์หน้าร้านและสั่งให้คุยผ่านโปรโตคอลความปลอดภัย HTTPS พอร์ต 8043
+    const EPSON_IP = '192.168.1.201';
+    const EPSON_PORT = '8043';
+    let ePosDevice = new epson.ePOSDevice();
+    let posPrinter = null;
+
+    const runBackend = (functionName, ...args) => new Promise((resolve, reject) => google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[functionName](...args));
 
     document.addEventListener("DOMContentLoaded", function() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const branchFromUrl = urlParams.get('branch');
-      if (branchFromUrl) { localStorage.setItem('f16_branch_code', branchFromUrl.trim().toUpperCase()); }
-      MY_BRANCH = localStorage.getItem('f16_branch_code') || "206";
-      document.getElementById("branchBadge").textContent = `บอร์ดหน้าร้าน (${MY_BRANCH})`;
-      refreshDataLogic();
+      if(document.getElementById('transferEditModal')) bootstrapTransferModal = new bootstrap.Modal(document.getElementById('transferEditModal'));
+      
+      // ระบบรันฟังก์ชันคอนเนคหาตัวปริ้นเตอร์อัตโนมัติเบื้องหลัง
+      initEposPrinter();
+
+      runBackend('getBranchDataOnly').then(res => {
+        if (res && res.status === "success") {
+          MASTER_BRANCH_MAP = res.branchMap; MASTER_STAFF_MAP = res.staffMap; MASTER_PHONE_MAP = res.phoneMap || {};
+          let destSelect = document.getElementById('editTransferDest');
+          if(destSelect) {
+            for(let code in MASTER_BRANCH_MAP) { let opt = document.createElement('option'); opt.value = code + " " + MASTER_BRANCH_MAP[code]; opt.text = code + " " + MASTER_BRANCH_MAP[code]; destSelect.appendChild(opt); }
+            destSelect.addEventListener('change', function() { let destId = (this.value || "").split(" ")[0]; renderPills('attentionPillContainer', MASTER_STAFF_MAP[destId] || [], '', 'editTransferAttention'); });
+          }
+          let cachedBranch = localStorage.getItem('branchCode'), cachedStaff = localStorage.getItem('owndays_staff');
+          if (cachedBranch && MASTER_BRANCH_MAP[cachedBranch]) { document.getElementById("sName").textContent = `${cachedStaff} (${MASTER_BRANCH_MAP[cachedBranch]})`; document.getElementById("loginBox").style.display = "none"; document.getElementById("main").style.display = "block"; updNSInit(); initDashboardLoop(); } else { document.getElementById("loginBox").style.display = "block"; }
+        }
+      });
     });
 
-    function switchTab(tabId, btn) { 
-        document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); 
-        document.querySelectorAll('.tab-btn').forEach(el=>el.classList.remove('active')); 
-        document.getElementById(tabId).classList.add('active'); 
-        btn.classList.add('active'); 
-    }
-
-    function refreshDataLogic() {
-      const oldScript = document.getElementById('jsonpDataCall');
-      if (oldScript) oldScript.remove();
-      let script = document.createElement('script');
-      script.id = 'jsonpDataCall';
-      script.src = `${GOOGLE_API_URL}?branch=${MY_BRANCH}&callback=handleGoogleData&ts=${new Date().getTime()}`;
-      document.body.appendChild(script);
-    }
-
-    function renderQueueTable(list) {
-      const div = document.getElementById("list");
-      if(!list.length){ div.innerHTML = `<p class="text-center py-4 text-muted">ไม่มีคิวหน้าร้านสำหรับสาขานี้</p>`; return; }
-      let html = `<table class="table align-middle"><thead class="table-light"><tr><th>คิว</th><th>ลูกค้า</th><th>รุ่น</th><th>บริการ</th><th class="text-center">จัดการเครื่องพิมพ์ LAN</th></tr></thead><tbody>`;
-      list.forEach(i => {
-        html += `<tr>
-          <td class="fw-bold fs-4">${i.queueNumber || '-'}</td>
-          <td><b>${i.name || '-'}</b><br><small>${i.phone || '-'}</small></td>
-          <td>${i.model || '-'}</td>
-          <td>${i.service || '-'}</td>
-          <td class="text-center"><button class="btn btn-primary rounded-pill px-3" onclick="fireLanPrintQueue(${JSON.stringify(i).replace(/"/g, '&quot;')})"><i class="bi bi-printer"></i> กดพิมพ์คิวนี้</button></td>
-        </tr>`;
-      });
-      html += `</tbody></table>`;
-      div.innerHTML = html;
-    }
-
-    function renderLossTable(data) { 
-        const container = document.getElementById('lossHistoryList'); 
-        if(!container || !data.length) { container.innerHTML = '<p class="text-center py-4 text-muted">ไม่มีประวัติ Loss Lens</p>'; return; }; 
-        globalLossPrintData = [...data].reverse(); 
-        let html = `<table class="table table-hover align-middle"><thead class="table-light"><tr><th>CASE NO.</th><th>Customer ID</th><th>Reason</th><th>Lens Type</th><th class="text-center">สั่งพิมพ์ประวัติ</th></tr></thead><tbody>`;
-        globalLossPrintData.forEach((i, index) => {
-            html += `<tr><td class="fw-bold text-danger">${i.caseNo}</td><td>${i.customerId}</td><td><span class="badge bg-danger">${i.reason}</span></td><td class="text-primary fw-bold">${i.lensType}</td><td class="text-center"><button class="btn btn-danger rounded-pill px-3" onclick="fireLanPrintLoss(${index})"><i class="bi bi-printer"></i> กดพิมพ์สลิป</button></td></tr>`;
-        });
-        html += `</tbody></table>`;
-        container.innerHTML = html;
-    }
-
-    // 🚀 ฟังก์ชันหลักส่งข้อมูลเบิ้ลกระจายหาพอร์ต LAN เครื่องพิมพ์หน้าร้านแบบเงียบ (Bypass ป๊อปอัปเด้งกวน)
-    function executeSilentLanPrint(xmlBody) {
-      PRINTER_ENDPOINTS.forEach(endpoint => {
-        fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'text/xml; charset=utf-8' }, body: xmlBody }).catch(e => {});
+    function initEposPrinter() {
+      ePosDevice.connect(EPSON_IP, EPSON_PORT, (result) => {
+        const indicator = document.getElementById('epos-indicator');
+        if (result === 'OK' || result === 'SSL_CONNECT_OK') {
+          ePosDevice.createDevice('local_printer', ePosDevice.DEVICE_TYPE_PRINTER, {crypto: true, buffer: false}, (deviceObj, errorCode) => {
+            if (deviceObj) {
+              posPrinter = deviceObj;
+              if (indicator) indicator.innerHTML = "<span class='text-success'>● เครื่องพิมพ์เชื่อมต่อแล้ว (HTTPS)</span>";
+            } else {
+              if (indicator) indicator.innerHTML = `<span class='text-danger'>❌ อุปกรณ์ขัดข้อง: ${errorCode}</span>`;
+            }
+          });
+        } else {
+          if (indicator) indicator.innerHTML = "<span class='text-danger'>❌ ขาดการเชื่อมต่อเครื่องพิมพ์</span>";
+        }
       });
     }
 
-    // 🧪 ฟังก์ชันปุ่มกดทดลองออกคิวจำลองสดทันที
-    function clickToTestQueuePrint() {
-      let requestBody = '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">';
-      requestBody += '<align align="center"/><text font="font_a" width="2" height="2">OWNDAYS\n</text>';
-      requestBody += '<text font="font_a" width="3" height="3">99\n\n</text>';
-      requestBody += '<align align="left"/>';
-      requestBody += '<text font="font_a" width="1" height="1">ชื่อลูกค้า: คุณ ทดสอบระบบ LAN\n</text>';
-      requestBody += '<text font="font_a" width="1" height="1">บริการ: ตรวจวัดสายตาความเร็วสูง\n</text>';
-      requestBody += '<cut type="feed"/></epos-print>';
-      
-      executeSilentLanPrint(requestBody);
+    function checkBranchName() { const code = document.getElementById("branchCodeInput").value.trim(); const display = document.getElementById("branchNameDisplay"); if (MASTER_BRANCH_MAP[code]) { display.style.color = "#0071e3"; display.textContent = "📍 " + MASTER_BRANCH_MAP[code]; } else { display.style.color = "#ff3b30"; display.textContent = code ? "❌ ไม่พบสาขา" : ""; } }
+    
+    function login() { 
+      const b = document.getElementById("branchCodeInput").value.trim(); 
+      const s = document.getElementById("staffIdInput").value.trim(); 
+      if(!b || !s) return alert("กรอกข้อมูลให้ครบ"); 
+
+      const loginBtn = document.querySelector("#loginBox button");
+      const originalBtnText = loginBtn.innerText;
+      loginBtn.disabled = true;
+      loginBtn.innerText = "กำลังเข้าสู่ระบบ ⏳...";
+
+      runBackend('verifyStaffById', b, s).then(res => { 
+        if (res.status === "success") { 
+          localStorage.setItem('branchCode', b); 
+          localStorage.setItem('owndays_staff', res.staffName); 
+          
+          document.getElementById("sName").textContent = `${res.staffName} (${res.branchName})`; 
+          document.getElementById("loginBox").style.display = "none"; 
+          document.getElementById("main").style.display = "block"; 
+          
+          updNSInit(); 
+          initDashboardLoop(); 
+        } else {
+          alert(res.message);
+          loginBtn.disabled = false;
+          loginBtn.innerText = originalBtnText;
+        } 
+      }).catch(err => {
+        alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+        loginBtn.disabled = false;
+        loginBtn.innerText = originalBtnText;
+      });
     }
 
-    function fireLanPrintQueue(i) {
-      let serviceArr = (i.service || '-').split(',').map(s => s.trim()).filter(Boolean); 
-      let servicesText = serviceArr.map(s => `  - ${s}`).join('\n');
-      const timeStr = i.pickupTime ? new Date(i.pickupTime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : "-";
-      
-      let requestBody = '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print"><align align="center"/><text font="font_a" width="2" height="2">OWNDAYS\n</text><text font="font_a" width="3" height="3">' + (i.queueNumber || '-') + '\n\n</text><text font="font_a" width="1" height="1">นัดรับแว่นเวลา ' + timeStr + ' น.\n</text><align align="left"/><text font="font_a" width="1" height="1">ชื่อลูกค้า: คุณ ' + (i.name || '-') + '\n</text><text font="font_a" width="1" height="1">รุ่นแว่น: ' + (i.model || '-') + '\n</text><text font="font_a" width="1" height="1">บริการ:\n' + servicesText + '\n</text><cut type="feed"/></epos-print>';
-      executeSilentLanPrint(requestBody);
+    // 🔒 ล้างหน่วยความจำค้างหน้าและเด้งสลับจอ Logout กลับไปหน้าลงทะเบียนพนักงานกะใหม่ทันทีบน iPad
+    function logoutAndClear() { 
+      if(confirm("ออกจากระบบ?")) { 
+        localStorage.removeItem('branchCode'); 
+        localStorage.removeItem('owndays_staff'); 
+        
+        if(document.getElementById("branchCodeInput")) document.getElementById("branchCodeInput").value = "";
+        if(document.getElementById("staffIdInput")) document.getElementById("staffIdInput").value = "";
+        if(document.getElementById("branchNameDisplay")) document.getElementById("branchNameDisplay").textContent = "";
+
+        document.getElementById("main").style.display = "none"; 
+        document.getElementById("loginBox").style.display = "block"; 
+        
+        console.log("🔒 ล็อกเอาท์สำเร็จ ดีดกลับหน้า Sign In เรียบร้อย");
+      } 
     }
 
-    function fireLanPrintLoss(index) {
-      const data = globalLossPrintData[index]; if(!data) return;
-      let requestBody = '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print"><align align="center"/><text font="font_a" width="1" height="2">' + (data.reason || 'LOSS LENS') + '\n</text><text font="font_a" width="2" height="2">' + (data.caseNo || '-') + '\n\n</text><align align="left"/><text font="font_a" width="1" height="1">Customer ID: ' + (data.customerId || '-') + '\n</text><text font="font_a" width="1" height="1">Lens Type: ' + (data.lensType || '-') + '\n</text><cut type="feed"/></epos-print>';
-      executeSilentLanPrint(requestBody);
+    function switchTab(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); if(tabId==='queueTab') renderTable(currentQueueData); if(tabId==='transferTab') filterTransferTable(); if(tabId==='resTab') renderReservationTable(reservationRawData); if(tabId==='lossTab') renderLossTable(currentLossRawData); }
+    
+    function initDashboardLoop() { fastQueueLoop(); slowOtherDataLoop(); }
+    async function manualRefreshAll() { const btn = document.getElementById('mainRefreshBtn'); btn.disabled = true; btn.innerHTML = 'โหลด...'; await slowOtherDataLoop(); btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> รีเฟรช'; }
+
+    async function fastQueueLoop() {
+      if (!isFastFetching) {
+        isFastFetching = true;
+        let b = localStorage.getItem('branchCode'); 
+        if (b) {
+          try {
+            const d = await runBackend('getFastQueueOnly', b);
+            if (d && d.success) {
+              currentQueueData = (d.queue || []).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+              let queuePrintDelay = 0;
+              currentQueueData.forEach(i => { 
+                if(!printedQueueIds.has(i.queueId)){ 
+                  printedQueueIds.add(i.queueId); 
+                  localStorage.setItem("printedQueueIds", JSON.stringify([...printedQueueIds])); 
+                  setTimeout(() => {
+                    manualPrint(i); 
+                    document.getElementById("ding").play().catch(()=>{}); 
+                  }, queuePrintDelay);
+                  queuePrintDelay += 3000; 
+                } 
+              });
+              let newQueueString = JSON.stringify(currentQueueData);
+              if (newQueueString !== lastQueueString) {
+                if(document.getElementById('queueTab').classList.contains('active')) renderTable(currentQueueData);
+                lastQueueString = newQueueString;
+              }
+            }
+          } catch (e) {}
+        }
+        isFastFetching = false;
+      }
+      setTimeout(fastQueueLoop, 3000); 
     }
-  </script>
-</body>
-</html>
+
+    async function slowOtherDataLoop() {
+      if (!isSlowFetching) {
+        isSlowFetching = true;
+        let b = localStorage.getItem('branchCode'); 
+        if (b) {
+          try {
+            const d = await runBackend('getAllDashboardData', b); 
+            if (d && d.success) {
+              currentLossRawData = d.lossPrintJob || [];
+              let lossPrintDelay = 0;
+              currentLossRawData.forEach(item => { 
+                let uId
